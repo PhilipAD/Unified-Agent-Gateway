@@ -714,27 +714,6 @@ MIT — see [LICENSE](LICENSE).
 
 ---
 
-## 🚢 Publishing
-
-### PyPI (automated)
-
-Tag a release and push — the GitHub Actions publish workflow handles the rest:
-
-```bash
-git tag v0.2.0
-git push origin v0.2.0
-```
-
-Requires OIDC trusted publishing configured in your PyPI project settings.
-
-### GitHub repo (first time)
-
-```bash
-gh repo create PhilipAD/Unified-Agent-Gateway --public --source=. --remote=origin --push
-```
-
----
-
 <div align="center">
 
 **Unified Agent Gateway** — *One API. Every LLM. Any tool.*
