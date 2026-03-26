@@ -159,6 +159,8 @@ Same event shape, always.
 
 ## 🗺️ Feature Matrix
 
+**Every provider runs the same unified agent runtime** (multi-hop tool loop, shared HTTP API, normalized types). Each column is one **vendor integration** through that runtime—not a comparison of who “has an agent.” Rows below call out **optional vendor-specific surfaces** (built-in tools, how PDFs are passed, Mistral’s separate Agents HTTP API, etc.).
+
 | Feature | OpenAI | OpenAI Responses | Anthropic | Gemini | Groq | DeepSeek | Mistral | xAI/Grok |
 |---------|:------:|:----------------:|:---------:|:------:|:----:|:--------:|:-------:|:--------:|
 | Sync chat | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -173,10 +175,14 @@ Same event shape, always.
 | Structured outputs (JSON schema) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Prompt caching | — | ✅ | ✅ | ✅ | — | ✅ | — | ✅ |
 | Citations | — | ✅ | ✅ | — | ✅ | — | — | ✅ |
-| Document / PDF input | — | — | ✅ | — | ✅ | — | ✅ | — |
+| Document / PDF input | — | — | ✅ | ✅† | ✅ | — | ✅ | — |
 | Live web search | — | ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ |
-| Agents API | — | — | — | — | — | — | ✅ | — |
+| Mistral Agents API (`agent_id`) | — | — | — | — | — | — | ✅ | — |
 | Inline BYOK credentials | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+
+**† Document / PDF (vendor-specific flows):** Paths are not identical across providers. **Gemini:** upload with the [Gemini Files API](https://ai.google.dev/gemini-api/docs/files), then pass the file URI in user message parts (`type: "file"`, `mime_type`, etc.—see `providers/gemini.py`). **Anthropic / Groq / Mistral:** use each provider’s document or file content format in normalized messages. Where this SDK does not yet normalize a single “drop a PDF” shape for a vendor, the cell is **—** even if the upstream API can accept documents through other routes.
+
+**Mistral Agents API (`agent_id`):** This row is **only** [Mistral’s separate Agents HTTP API](https://docs.mistral.ai/agents/agents)—optional `agent_id` routing to `agents.complete` / server-defined agents and built-in tools. **All other providers** still run full agent loops through their own chat or Responses-style APIs; they do not expose Mistral’s branded Agents API, which is why the column is empty outside Mistral.
 
 ---
 
