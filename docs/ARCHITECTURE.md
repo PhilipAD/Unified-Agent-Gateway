@@ -1,4 +1,4 @@
-# Unified Agent Gateway -- Architecture
+# Unified Agents SDK -- Architecture
 
 ## Purpose
 

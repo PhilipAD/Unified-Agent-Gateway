@@ -1,4 +1,4 @@
-# Unified Agent Gateway -- API Specification
+# Unified Agents SDK -- API Specification
 
 ## Base URL
 

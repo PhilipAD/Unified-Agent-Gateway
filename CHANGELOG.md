@@ -130,11 +130,11 @@ Initial public release.
 **Docs and tooling**
 - `docs/ARCHITECTURE.md` — Full architecture reference.
 - `docs/API_SPEC.md` — Endpoint spec with all fields.
-- `postman/unified-agent-gateway.postman_collection.json` — 52 requests across 10 folders.
+- `postman/unified-agents-sdk.postman_collection.json` — 52 requests across 10 folders.
 - `.env.example` — Fully documented environment variable reference.
 - `pyproject.toml` — Hatchling build, ruff config, pytest config.
 
-[Unreleased]: https://github.com/PhilipAD/Unified-Agent-Gateway/compare/v0.2.1...HEAD
-[0.2.1]: https://github.com/PhilipAD/Unified-Agent-Gateway/compare/v0.2.0...v0.2.1
-[0.2.0]: https://github.com/PhilipAD/Unified-Agent-Gateway/compare/v0.1.0...v0.2.0
-[0.1.0]: https://github.com/PhilipAD/Unified-Agent-Gateway/releases/tag/v0.1.0
+[Unreleased]: https://github.com/PhilipAD/Unified-Agents-SDK/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/PhilipAD/Unified-Agents-SDK/compare/v0.2.0...v0.2.1
+[0.2.0]: https://github.com/PhilipAD/Unified-Agents-SDK/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/PhilipAD/Unified-Agents-SDK/releases/tag/v0.1.0

@@ -1,4 +1,4 @@
-# Contributing to Unified Agent Gateway
+# Contributing to Unified Agents SDK
 
 Thank you for taking the time to contribute! This document covers everything you need to go from idea to merged PR.
 
@@ -43,8 +43,8 @@ This project follows the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.
 
 ```bash
 # 1. Fork and clone
-git clone https://github.com/YOUR_GITHUB_USERNAME/unified-agent-gateway.git
-cd unified-agent-gateway
+git clone https://github.com/YOUR_GITHUB_USERNAME/unified-agents-sdk.git
+cd unified-agents-sdk
 
 # 2. Create a virtual environment
 python -m venv .venv
@@ -276,4 +276,4 @@ Examples:
 
 ## Questions?
 
-Open a [GitHub Discussion](https://github.com/your-org/unified-agent-gateway/discussions) or reach out via the issue tracker.
+Open a [GitHub Discussion](https://github.com/your-org/unified-agents-sdk/discussions) or reach out via the issue tracker.

@@ -43,7 +43,7 @@ async def _lifespan(app: FastAPI):  # noqa: ARG001
     yield
 
 
-app = FastAPI(title="Unified Agent Gateway", version="0.1.0", lifespan=_lifespan)
+app = FastAPI(title="Unified Agents SDK", version="0.1.0", lifespan=_lifespan)
 
 
 def configure(

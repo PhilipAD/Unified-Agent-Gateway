@@ -21,7 +21,7 @@ labels: bug
 
 ## Environment
 
-- unified-agent-gateway version / commit:
+- unified-agents-sdk version / commit:
 - Python version:
 - OS:
 

@@ -1,8 +1,8 @@
 {
   "info": {
-    "name": "Unified Agent Gateway",
+    "name": "Unified Agents SDK",
     "_postman_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-    "description": "Complete Postman collection for the Unified Agent Gateway.\n\nTwo endpoints:\n- POST /agent-query         — synchronous, returns JSON\n- POST /agent-query/stream  — Server-Sent Events (SSE)\n\nAll requests share the same body schema (AgentQueryRequest).\nFields marked OPTIONAL can be omitted.\n\nBring-your-own-key (BYOK): optional top-level field `provider_credentials` with `api_key`, optional `model`, optional `base_url` (OpenAI-compatible only). Requires `ALLOW_PER_REQUEST_PROVIDER_CREDENTIALS=true` in gateway .env — default is false (403 if you send real credentials while disabled).\n\nVariables — set in the collection or an environment:\n  base_url           http://localhost:8000\n  openai_key         paste here for BYOK OpenAI examples (same secret you could put in gateway .env)\n  anthropic_key      sk-ant-...\n  google_key         AI...\n  mcp_server_url     http://your-mcp-server/mcp\n  rag_url            http://your-rag-service/search\n  tool_url           http://your-tool-service/run",
+    "description": "Complete Postman collection for the Unified Agents SDK.\n\nTwo endpoints:\n- POST /agent-query         — synchronous, returns JSON\n- POST /agent-query/stream  — Server-Sent Events (SSE)\n\nAll requests share the same body schema (AgentQueryRequest).\nFields marked OPTIONAL can be omitted.\n\nBring-your-own-key (BYOK): optional top-level field `provider_credentials` with `api_key`, optional `model`, optional `base_url` (OpenAI-compatible only). Requires `ALLOW_PER_REQUEST_PROVIDER_CREDENTIALS=true` in gateway .env — default is false (403 if you send real credentials while disabled).\n\nVariables — set in the collection or an environment:\n  base_url           http://localhost:8000\n  openai_key         paste here for BYOK OpenAI examples (same secret you could put in gateway .env)\n  anthropic_key      sk-ant-...\n  google_key         AI...\n  mcp_server_url     http://your-mcp-server/mcp\n  rag_url            http://your-rag-service/search\n  tool_url           http://your-tool-service/run",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -89,7 +89,7 @@
               "status": "OK",
               "code": 200,
               "header": [{ "key": "Content-Type", "value": "application/json" }],
-              "body": "{\n  \"output\": \"We're thrilled to announce Unified Agent Gateway v2.0 — now with native MCP support and per-request context injection!\",\n  \"tool_traces\": [],\n  \"usage\": { \"input_tokens\": 18, \"output_tokens\": 31 },\n  \"provider\": \"openai_compatible\",\n  \"model\": \"gpt-4o\",\n  \"warnings\": [],\n  \"errors\": []\n}"
+              "body": "{\n  \"output\": \"We're thrilled to announce Unified Agents SDK v2.0 — now with native MCP support and per-request context injection!\",\n  \"tool_traces\": [],\n  \"usage\": { \"input_tokens\": 18, \"output_tokens\": 31 },\n  \"provider\": \"openai_compatible\",\n  \"model\": \"gpt-4o\",\n  \"warnings\": [],\n  \"errors\": []\n}"
             }
           ]
         }

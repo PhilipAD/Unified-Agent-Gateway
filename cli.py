@@ -1,4 +1,4 @@
-"""Unified Agent Gateway CLI.
+"""Unified Agents SDK CLI.
 
 Usage::
 
@@ -20,7 +20,7 @@ from rich.table import Table
 
 app = typer.Typer(
     name="uag",
-    help="Unified Agent Gateway -- One API. Every LLM. Any tool.",
+    help="Unified Agents SDK -- One API. Every LLM. Any tool.",
     add_completion=False,
     no_args_is_help=True,
 )
@@ -34,7 +34,7 @@ def serve(
     reload: bool = typer.Option(False, help="Enable auto-reload for development"),
     workers: int = typer.Option(1, help="Number of worker processes"),
 ) -> None:
-    """Start the Unified Agent Gateway HTTP server."""
+    """Start the Unified Agents SDK HTTP server."""
     import uvicorn
 
     from runtime.bootstrap import bootstrap_and_configure_app
