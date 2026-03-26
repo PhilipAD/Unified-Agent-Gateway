@@ -1,0 +1,1353 @@
+{
+  "info": {
+    "name": "Unified Agent Gateway",
+    "_postman_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "description": "Complete Postman collection for the Unified Agent Gateway.\n\nTwo endpoints:\n- POST /agent-query         — synchronous, returns JSON\n- POST /agent-query/stream  — Server-Sent Events (SSE)\n\nAll requests share the same body schema (AgentQueryRequest).\nFields marked OPTIONAL can be omitted.\n\nBring-your-own-key (BYOK): optional top-level field `provider_credentials` with `api_key`, optional `model`, optional `base_url` (OpenAI-compatible only). Requires `ALLOW_PER_REQUEST_PROVIDER_CREDENTIALS=true` in gateway .env — default is false (403 if you send real credentials while disabled).\n\nVariables — set in the collection or an environment:\n  base_url           http://localhost:8000\n  openai_key         paste here for BYOK OpenAI examples (same secret you could put in gateway .env)\n  anthropic_key      sk-ant-...\n  google_key         AI...\n  mcp_server_url     http://your-mcp-server/mcp\n  rag_url            http://your-rag-service/search\n  tool_url           http://your-tool-service/run",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url",       "value": "http://localhost:8000", "type": "string" },
+    { "key": "openai_key",     "value": "sk-your-openai-key",    "type": "string" },
+    { "key": "anthropic_key",  "value": "sk-ant-your-key",       "type": "string" },
+    { "key": "google_key",     "value": "AI-your-google-key",    "type": "string" },
+    { "key": "groq_key",       "value": "gsk-your-groq-key",     "type": "string" },
+    { "key": "mcp_server_url", "value": "http://localhost:9000/mcp", "type": "string" },
+    { "key": "rag_url",        "value": "http://localhost:7000/search", "type": "string" },
+    { "key": "tool_url",       "value": "http://localhost:6000/run",    "type": "string" }
+  ],
+  "item": [
+
+    {
+      "name": "1 — Basic Queries",
+      "description": "Minimal requests showing the simplest possible usage. All fields except 'input' are OPTIONAL.",
+      "item": [
+
+        {
+          "name": "1.1 Minimal — input only",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"input\": \"What is the capital of France?\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/agent-query", "host": ["{{base_url}}"], "path": ["agent-query"] },
+            "description": "Only 'input' is required. Uses the 'default' profile and global provider from .env."
+          },
+          "response": [
+            {
+              "name": "200 OK — success",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"output\": \"The capital of France is Paris.\",\n  \"tool_traces\": [],\n  \"usage\": { \"input_tokens\": 14, \"output_tokens\": 9 },\n  \"provider\": \"openai_compatible\",\n  \"model\": \"gpt-4o\",\n  \"warnings\": [],\n  \"errors\": []\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "1.2 With system prompt",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"input\": \"Summarise the latest trends in AI.\",\n  \"context\": {\n    \"system_prompt\": \"You are a concise technical analyst. Reply in bullet points, maximum 5 bullets.\"\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/agent-query", "host": ["{{base_url}}"], "path": ["agent-query"] },
+            "description": "Pass a system prompt via context.system_prompt. This is the standard way to set agent persona / instructions."
+          },
+          "response": [
+            {
+              "name": "200 OK — bulleted response",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"output\": \"- Multimodal models dominate new releases\\n- Agentic systems with tool use are mainstream\\n- On-device inference growing fast\\n- Open-source models closing the gap with proprietary\\n- Inference cost dropping 10x year-over-year\",\n  \"tool_traces\": [],\n  \"usage\": { \"input_tokens\": 32, \"output_tokens\": 58 },\n  \"provider\": \"openai_compatible\",\n  \"model\": \"gpt-4o\",\n  \"warnings\": [],\n  \"errors\": []\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "1.3 With agent_id targeting",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"input\": \"Draft a release announcement for v2.0.\",\n  \"agent_id\": \"marketing-bot\",\n  \"profile\": \"default\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/agent-query", "host": ["{{base_url}}"], "path": ["agent-query"] },
+            "description": "agent_id + profile together form the lookup key. Lookup order: 'marketing-bot:default' → 'default' → fallback. Useful for multi-tenant deployments."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"output\": \"We're thrilled to announce Unified Agent Gateway v2.0 — now with native MCP support and per-request context injection!\",\n  \"tool_traces\": [],\n  \"usage\": { \"input_tokens\": 18, \"output_tokens\": 31 },\n  \"provider\": \"openai_compatible\",\n  \"model\": \"gpt-4o\",\n  \"warnings\": [],\n  \"errors\": []\n}"
+            }
+          ]
+        }
+
+      ]
+    },
+
+    {
+      "name": "2 — Provider Profiles",
+      "description": "Select different LLM backends via the 'profile' field. Profiles are defined in AGENT_PROFILES in .env.",
+      "item": [
+
+        {
+          "name": "2.1 Default profile (OpenAI)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"input\": \"Explain quantum entanglement simply.\",\n  \"profile\": \"default\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/agent-query", "host": ["{{base_url}}"], "path": ["agent-query"] },
+            "description": "Explicit 'default' profile — resolves to openai_compatible provider with DEFAULT_OPENAI_MODEL from .env."
+          },
+          "response": [
+            {
+              "name": "200 OK — OpenAI",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"output\": \"Quantum entanglement is when two particles become linked so that measuring one instantly affects the other, no matter how far apart they are.\",\n  \"tool_traces\": [],\n  \"usage\": { \"input_tokens\": 10, \"output_tokens\": 34 },\n  \"provider\": \"openai_compatible\",\n  \"model\": \"gpt-4o\",\n  \"warnings\": [],\n  \"errors\": []\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "2.2 Anthropic Claude profile",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"input\": \"Write a haiku about distributed systems.\",\n  \"profile\": \"claude\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/agent-query", "host": ["{{base_url}}"], "path": ["agent-query"] },
+            "description": "Requires AGENT_PROFILES to have a 'claude' entry in .env:\n  AGENT_PROFILES={\"claude\":{\"provider_name\":\"anthropic\",\"model\":\"claude-opus-4-5\"}}"
+          },
+          "response": [
+            {
+              "name": "200 OK — Anthropic",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"output\": \"Nodes whisper in time\\nConsensus blooms like spring rain\\nFault tolerance holds\",\n  \"tool_traces\": [],\n  \"usage\": { \"input_tokens\": 12, \"output_tokens\": 17 },\n  \"provider\": \"anthropic\",\n  \"model\": \"claude-opus-4-5\",\n  \"warnings\": [],\n  \"errors\": []\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "2.3 Google Gemini profile",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"input\": \"List three uses for generative AI in healthcare.\",\n  \"profile\": \"gemini\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/agent-query", "host": ["{{base_url}}"], "path": ["agent-query"] },
+            "description": "Requires AGENT_PROFILES to have a 'gemini' entry:\n  AGENT_PROFILES={\"gemini\":{\"provider_name\":\"gemini\",\"model\":\"gemini-2.5-flash\"}}"
+          },
+          "response": [
+            {
+              "name": "200 OK — Gemini",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"output\": \"1. Medical image analysis\\n2. Clinical note summarisation\\n3. Drug interaction checking\",\n  \"tool_traces\": [],\n  \"usage\": { \"input_tokens\": 13, \"output_tokens\": 20 },\n  \"provider\": \"gemini\",\n  \"model\": \"gemini-2.5-flash\",\n  \"warnings\": [],\n  \"errors\": []\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "2.4 Groq (custom OAI-compatible) profile",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"input\": \"Translate 'hello world' into Spanish, French, and Japanese.\",\n  \"profile\": \"fast\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/agent-query", "host": ["{{base_url}}"], "path": ["agent-query"] },
+            "description": "Uses a custom OAI-compatible provider (Groq) defined in .env:\n  OPENAI_COMPATIBLE_PROVIDERS={\"groq\":{\"api_key\":\"gsk-...\",\"base_url\":\"https://api.groq.com/openai/v1\",\"model\":\"llama-3.3-70b-versatile\"}}\n  AGENT_PROFILES={\"fast\":{\"provider_name\":\"groq\"}}"
+          },
+          "response": [
+            {
+              "name": "200 OK — Groq/Llama",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"output\": \"Spanish: Hola mundo\\nFrench: Bonjour le monde\\nJapanese: ハローワールド\",\n  \"tool_traces\": [],\n  \"usage\": { \"input_tokens\": 16, \"output_tokens\": 22 },\n  \"provider\": \"openai_compatible\",\n  \"model\": \"llama-3.3-70b-versatile\",\n  \"warnings\": [],\n  \"errors\": []\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "2.5 DeepSeek profile",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"input\": \"Implement a binary search in Python.\",\n  \"profile\": \"deepseek\",\n  \"context\": {\n    \"system_prompt\": \"You are an expert Python engineer. Provide clean, annotated code only.\"\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/agent-query", "host": ["{{base_url}}"], "path": ["agent-query"] },
+            "description": "DeepSeek-chat via OPENAI_COMPATIBLE_PROVIDERS:\n  OPENAI_COMPATIBLE_PROVIDERS={\"deepseek\":{\"api_key\":\"sk-ds-...\",\"base_url\":\"https://api.deepseek.com\",\"model\":\"deepseek-chat\"}}\n  AGENT_PROFILES={\"deepseek\":{\"provider_name\":\"deepseek\"}}"
+          },
+          "response": [
+            {
+              "name": "200 OK — DeepSeek",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"output\": \"def binary_search(arr, target):\\n    lo, hi = 0, len(arr) - 1\\n    while lo <= hi:\\n        mid = (lo + hi) // 2\\n        if arr[mid] == target:\\n            return mid\\n        elif arr[mid] < target:\\n            lo = mid + 1\\n        else:\\n            hi = mid - 1\\n    return -1\",\n  \"tool_traces\": [],\n  \"usage\": { \"input_tokens\": 28, \"output_tokens\": 74 },\n  \"provider\": \"openai_compatible\",\n  \"model\": \"deepseek-chat\",\n  \"warnings\": [],\n  \"errors\": []\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "2.6 Per-request model override via options",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"input\": \"Give me a one-line definition of an LLM.\",\n  \"profile\": \"default\",\n  \"options\": {\n    \"temperature\": 0.2,\n    \"max_tokens\": 100\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/agent-query", "host": ["{{base_url}}"], "path": ["agent-query"] },
+            "description": "Extra generation options are passed through to the provider. temperature, max_tokens, top_p etc. are forwarded as-is."
+          },
+          "response": [
+            {
+              "name": "200 OK — with options",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"output\": \"A large language model is a neural network trained on vast text corpora to predict and generate natural language.\",\n  \"tool_traces\": [],\n  \"usage\": { \"input_tokens\": 13, \"output_tokens\": 24 },\n  \"provider\": \"openai_compatible\",\n  \"model\": \"gpt-4o\",\n  \"warnings\": [],\n  \"errors\": []\n}"
+            }
+          ]
+        }
+
+      ]
+    },
+
+    {
+      "name": "3 — Named Presets (from .env)",
+      "description": "Reference MCP servers and context sources configured in .env. Credentials stay server-side — callers only pass namespace/name strings.",
+      "item": [
+
+        {
+          "name": "3.1 Named MCP namespace reference",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"input\": \"Search for recent papers on transformer architecture improvements.\",\n  \"runtime\": {\n    \"mcp_namespaces\": [\"search\"]\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/agent-query", "host": ["{{base_url}}"], "path": ["agent-query"] },
+            "description": "Requires MCP_SERVERS in .env:\n  MCP_SERVERS={\"search\":{\"url\":\"http://search-mcp/mcp\",\"transport\":\"streamable_http\",\"headers\":{\"Authorization\":\"Bearer sk-xyz\"}}}\n\nThe gateway connects at request time, discovers tools, registers them under 'search.*', then tears down the session on completion."
+          },
+          "response": [
+            {
+              "name": "200 OK — MCP tool used",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"output\": \"Found 3 recent papers: (1) FlashAttention-3, (2) Mamba-2 hybrid architecture, (3) Ring Attention for long contexts.\",\n  \"tool_traces\": [\n    {\n      \"tool\": \"search.semantic_search\",\n      \"args\": { \"query\": \"transformer architecture improvements\", \"limit\": 5 },\n      \"result\": \"[paper1, paper2, paper3]\"\n    }\n  ],\n  \"usage\": { \"input_tokens\": 45, \"output_tokens\": 38 },\n  \"provider\": \"openai_compatible\",\n  \"model\": \"gpt-4o\",\n  \"warnings\": [],\n  \"errors\": []\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "3.2 Multiple named MCP namespaces",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"input\": \"Find the quarterly report PDF in our shared drive and summarise its key figures.\",\n  \"runtime\": {\n    \"mcp_namespaces\": [\"search\", \"files\"]\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/agent-query", "host": ["{{base_url}}"], "path": ["agent-query"] },
+            "description": "Multiple MCP servers activated simultaneously. Each gets its own session and namespace prefix. Tools: 'search.*' and 'files.*'."
+          },
+          "response": [
+            {
+              "name": "200 OK — multi-MCP",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"output\": \"Q3 2025 revenue: $12.4M (+18% YoY). EBITDA margin: 22%. Headcount grew to 156. Key risk: supply chain delays in APAC.\",\n  \"tool_traces\": [\n    { \"tool\": \"search.find_document\", \"args\": { \"name\": \"quarterly report\" }, \"result\": \"/drive/Q3_2025.pdf\" },\n    { \"tool\": \"files.read_pdf\", \"args\": { \"path\": \"/drive/Q3_2025.pdf\" }, \"result\": \"[PDF content]\" }\n  ],\n  \"usage\": { \"input_tokens\": 88, \"output_tokens\": 54 },\n  \"provider\": \"openai_compatible\",\n  \"model\": \"gpt-4o\",\n  \"warnings\": [],\n  \"errors\": []\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "3.3 Named context reference",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"input\": \"Draft a reply to a customer complaint about shipping delays.\",\n  \"runtime\": {\n    \"context_names\": [\"company_info\", \"tone_guide\"]\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/agent-query", "host": ["{{base_url}}"], "path": ["agent-query"] },
+            "description": "context_names references NAMED_CONTEXTS keys from .env:\n  NAMED_CONTEXTS={\n    \"company_info\":{\"mode\":\"static\",\"text\":\"We are Acme Corp, a global e-commerce platform.\"},\n    \"tone_guide\":{\"mode\":\"static\",\"text\":\"Always be empathetic, professional, and solution-focused.\"}\n  }\nBoth texts are injected into the system prompt before the model sees the user input."
+          },
+          "response": [
+            {
+              "name": "200 OK — with context",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"output\": \"Dear valued customer, we sincerely apologise for the delay in your shipment. As a global platform, we occasionally experience carrier disruptions, but we're actively working to resolve this. Your order is now prioritised and will arrive within 2 business days. We'd like to offer you a 10% discount on your next order as a gesture of goodwill.\",\n  \"tool_traces\": [],\n  \"usage\": { \"input_tokens\": 92, \"output_tokens\": 76 },\n  \"provider\": \"openai_compatible\",\n  \"model\": \"gpt-4o\",\n  \"warnings\": [],\n  \"errors\": []\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "3.4 Profile with built-in presets — no runtime needed",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"input\": \"What are the top 3 open support tickets this week?\",\n  \"profile\": \"support-agent\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/agent-query", "host": ["{{base_url}}"], "path": ["agent-query"] },
+            "description": "The 'support-agent' profile in .env bakes in all necessary presets:\n  AGENT_PROFILES={\n    \"support-agent\":{\n      \"provider_name\":\"openai_compatible\",\n      \"mcp_namespaces\":[\"ticketing\"],\n      \"context_names\":[\"company_info\",\"support_playbook\"]\n    }\n  }\nCallers send ZERO runtime config — everything is resolved server-side from the profile definition."
+          },
+          "response": [
+            {
+              "name": "200 OK — profile-driven presets",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"output\": \"Top 3 open tickets this week:\\n1. #4821 — Login failures (P1, 4h open)\\n2. #4836 — Payment gateway timeout (P2, 2h open)\\n3. #4840 — Missing invoice PDF (P3, 1h open)\",\n  \"tool_traces\": [\n    { \"tool\": \"ticketing.list_tickets\", \"args\": { \"status\": \"open\", \"limit\": 3, \"sort\": \"priority\" }, \"result\": \"[ticket list]\" }\n  ],\n  \"usage\": { \"input_tokens\": 110, \"output_tokens\": 52 },\n  \"provider\": \"openai_compatible\",\n  \"model\": \"gpt-4o\",\n  \"warnings\": [],\n  \"errors\": []\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "3.5 Mixed — named presets + inline additions",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"input\": \"Search for the report and then send a Slack notification with the summary.\",\n  \"profile\": \"researcher\",\n  \"runtime\": {\n    \"mcp_namespaces\": [\"search\"],\n    \"tools\": [\n      {\n        \"name\": \"slack_notify\",\n        \"description\": \"Send a message to Slack\",\n        \"json_schema\": {\n          \"type\": \"object\",\n          \"properties\": {\n            \"channel\": { \"type\": \"string\" },\n            \"message\": { \"type\": \"string\" }\n          },\n          \"required\": [\"channel\", \"message\"]\n        },\n        \"url\": \"https://hooks.slack.com/services/T00/B00/xxxx\",\n        \"method\": \"POST\",\n        \"argument_mode\": \"json\"\n      }\n    ]\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/agent-query", "host": ["{{base_url}}"], "path": ["agent-query"] },
+            "description": "Combines a profile-level preset ('researcher' profile auto-includes 'search' MCP from .env) with a one-off inline HTTP tool added just for this request."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"output\": \"Found the Q3 report and sent the summary to #finance-team on Slack.\",\n  \"tool_traces\": [\n    { \"tool\": \"search.find_document\", \"args\": { \"name\": \"Q3 report\" }, \"result\": \"Q3 Report summary...\" },\n    { \"tool\": \"slack_notify\", \"args\": { \"channel\": \"#finance-team\", \"message\": \"Q3 report summary: ...\" }, \"result\": \"ok\" }\n  ],\n  \"usage\": { \"input_tokens\": 134, \"output_tokens\": 41 },\n  \"provider\": \"openai_compatible\",\n  \"model\": \"gpt-4o\",\n  \"warnings\": [],\n  \"errors\": []\n}"
+            }
+          ]
+        }
+
+      ]
+    },
+
+    {
+      "name": "4 — Inline MCP Servers",
+      "description": "Provide full MCP server connection details inline in the request. Best for ad-hoc or user-supplied MCP servers.",
+      "item": [
+
+        {
+          "name": "4.1 Single MCP server — Streamable HTTP (recommended)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"input\": \"List the top 5 results for 'vector database benchmarks'.\",\n  \"runtime\": {\n    \"mcp_servers\": [\n      {\n        \"url\": \"{{mcp_server_url}}\",\n        \"namespace\": \"search\",\n        \"transport\": \"streamable_http\"\n      }\n    ]\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/agent-query", "host": ["{{base_url}}"], "path": ["agent-query"] },
+            "description": "Full inline MCP server spec. transport defaults to 'streamable_http' (MCP spec >= 2024-11-05). Tools discovered at request time and registered under 'search.*'."
+          },
+          "response": [
+            {
+              "name": "200 OK — MCP tools discovered",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"output\": \"Top 5 results for vector database benchmarks: 1) pgvector vs Pinecone, 2) Weaviate ANN performance, ...\",\n  \"tool_traces\": [\n    { \"tool\": \"search.search\", \"args\": { \"query\": \"vector database benchmarks\", \"limit\": 5 }, \"result\": \"[results]\" }\n  ],\n  \"usage\": { \"input_tokens\": 52, \"output_tokens\": 61 },\n  \"provider\": \"openai_compatible\",\n  \"model\": \"gpt-4o\",\n  \"warnings\": [],\n  \"errors\": []\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "4.2 Single MCP server — SSE legacy transport",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"input\": \"Read the file /data/report.md and summarise it.\",\n  \"runtime\": {\n    \"mcp_servers\": [\n      {\n        \"url\": \"http://files-mcp.internal/sse\",\n        \"namespace\": \"files\",\n        \"transport\": \"sse\",\n        \"timeout_seconds\": 60\n      }\n    ]\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/agent-query", "host": ["{{base_url}}"], "path": ["agent-query"] },
+            "description": "Use transport: 'sse' for older MCP servers (pre-2024-11-05). Longer timeout for large file reads."
+          },
+          "response": [
+            {
+              "name": "200 OK — SSE MCP",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"output\": \"The report covers Q3 performance: revenue up 18%, new customer acquisition +24%, churn at 2.1%.\",\n  \"tool_traces\": [\n    { \"tool\": \"files.read_file\", \"args\": { \"path\": \"/data/report.md\" }, \"result\": \"[file content]\" }\n  ],\n  \"usage\": { \"input_tokens\": 320, \"output_tokens\": 38 },\n  \"provider\": \"openai_compatible\",\n  \"model\": \"gpt-4o\",\n  \"warnings\": [],\n  \"errors\": []\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "4.3 MCP server with auth headers",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"input\": \"Create a new GitHub issue titled 'Fix pagination bug'.\",\n  \"runtime\": {\n    \"mcp_servers\": [\n      {\n        \"url\": \"https://mcp.github.example.com/mcp\",\n        \"namespace\": \"github\",\n        \"transport\": \"streamable_http\",\n        \"headers\": {\n          \"Authorization\": \"Bearer ghp_your_github_token\",\n          \"X-Tenant-ID\": \"acme-corp\"\n        },\n        \"timeout_seconds\": 30\n      }\n    ]\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/agent-query", "host": ["{{base_url}}"], "path": ["agent-query"] },
+            "description": "Pass arbitrary headers to the MCP server. Use for OAuth tokens, tenant IDs, API keys, etc. These are forwarded on every MCP request during the session."
+          },
+          "response": [
+            {
+              "name": "200 OK — GitHub issue created",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"output\": \"Created GitHub issue #2047: 'Fix pagination bug' in acme-corp/main-app.\",\n  \"tool_traces\": [\n    { \"tool\": \"github.create_issue\", \"args\": { \"title\": \"Fix pagination bug\", \"repo\": \"main-app\" }, \"result\": \"{ \\\"number\\\": 2047 }\" }\n  ],\n  \"usage\": { \"input_tokens\": 48, \"output_tokens\": 24 },\n  \"provider\": \"openai_compatible\",\n  \"model\": \"gpt-4o\",\n  \"warnings\": [],\n  \"errors\": []\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "4.4 Multiple inline MCP servers",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"input\": \"Search for the customer record for 'jane@acme.com' and then log a support note.\",\n  \"runtime\": {\n    \"mcp_servers\": [\n      {\n        \"url\": \"http://crm-mcp.internal/mcp\",\n        \"namespace\": \"crm\",\n        \"transport\": \"streamable_http\",\n        \"headers\": { \"Authorization\": \"Bearer crm-token\" }\n      },\n      {\n        \"url\": \"http://support-mcp.internal/mcp\",\n        \"namespace\": \"support\",\n        \"transport\": \"streamable_http\",\n        \"headers\": { \"Authorization\": \"Bearer support-token\" }\n      }\n    ]\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/agent-query", "host": ["{{base_url}}"], "path": ["agent-query"] },
+            "description": "Multiple fully-specified MCP servers in a single request. Each runs as an independent session with its own namespace. Sessions are all cleaned up when the request completes."
+          },
+          "response": [
+            {
+              "name": "200 OK — multi-session MCP",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"output\": \"Found customer Jane Doe (ID: C-1042) and logged support note 'Contacted re: delivery inquiry'.\",\n  \"tool_traces\": [\n    { \"tool\": \"crm.lookup_customer\", \"args\": { \"email\": \"jane@acme.com\" }, \"result\": \"{ id: C-1042, name: Jane Doe }\" },\n    { \"tool\": \"support.add_note\", \"args\": { \"customer_id\": \"C-1042\", \"note\": \"Delivery inquiry\" }, \"result\": \"ok\" }\n  ],\n  \"usage\": { \"input_tokens\": 95, \"output_tokens\": 42 },\n  \"provider\": \"openai_compatible\",\n  \"model\": \"gpt-4o\",\n  \"warnings\": [],\n  \"errors\": []\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "4.5 MCP server with top-level namespace prefix",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"input\": \"Search for papers on attention mechanisms.\",\n  \"runtime\": {\n    \"namespace\": \"tenant_a\",\n    \"mcp_servers\": [\n      {\n        \"url\": \"http://search-mcp.internal/mcp\",\n        \"namespace\": \"search\"\n      }\n    ]\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/agent-query", "host": ["{{base_url}}"], "path": ["agent-query"] },
+            "description": "runtime.namespace adds a prefix to ALL tools and contexts registered in this request. Result: tools are registered as 'tenant_a.search.*'. Useful for multi-tenant isolation."
+          },
+          "response": [
+            {
+              "name": "200 OK — namespaced tools",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"output\": \"Found 4 papers on attention mechanisms.\",\n  \"tool_traces\": [\n    { \"tool\": \"tenant_a.search.semantic_search\", \"args\": { \"query\": \"attention mechanisms\" }, \"result\": \"[4 papers]\" }\n  ],\n  \"usage\": { \"input_tokens\": 44, \"output_tokens\": 18 },\n  \"provider\": \"openai_compatible\",\n  \"model\": \"gpt-4o\",\n  \"warnings\": [],\n  \"errors\": []\n}"
+            }
+          ]
+        }
+
+      ]
+    },
+
+    {
+      "name": "5 — Inline HTTP Tools",
+      "description": "Define arbitrary HTTP-callable tools inline in the request body. No MCP server needed — any REST endpoint can be a tool.",
+      "item": [
+
+        {
+          "name": "5.1 Single HTTP tool — POST JSON body",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"input\": \"Get the current exchange rate from USD to EUR.\",\n  \"runtime\": {\n    \"tools\": [\n      {\n        \"name\": \"exchange_rate\",\n        \"description\": \"Get current currency exchange rate\",\n        \"json_schema\": {\n          \"type\": \"object\",\n          \"properties\": {\n            \"from\": { \"type\": \"string\", \"description\": \"Source currency code (e.g. USD)\" },\n            \"to\":   { \"type\": \"string\", \"description\": \"Target currency code (e.g. EUR)\" }\n          },\n          \"required\": [\"from\", \"to\"]\n        },\n        \"url\": \"https://api.exchangerate.example.com/v1/rate\",\n        \"method\": \"POST\",\n        \"argument_mode\": \"json\"\n      }\n    ]\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/agent-query", "host": ["{{base_url}}"], "path": ["agent-query"] },
+            "description": "argument_mode: 'json' sends the model's tool arguments as a JSON body. The response (JSON or text) is returned to the model."
+          },
+          "response": [
+            {
+              "name": "200 OK — tool called",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"output\": \"The current USD to EUR exchange rate is 0.9241.\",\n  \"tool_traces\": [\n    { \"tool\": \"exchange_rate\", \"args\": { \"from\": \"USD\", \"to\": \"EUR\" }, \"result\": \"{ \\\"rate\\\": 0.9241 }\" }\n  ],\n  \"usage\": { \"input_tokens\": 68, \"output_tokens\": 17 },\n  \"provider\": \"openai_compatible\",\n  \"model\": \"gpt-4o\",\n  \"warnings\": [],\n  \"errors\": []\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "5.2 HTTP tool — GET with query params",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"input\": \"What is the weather like in London today?\",\n  \"runtime\": {\n    \"tools\": [\n      {\n        \"name\": \"weather\",\n        \"description\": \"Get current weather for a city\",\n        \"json_schema\": {\n          \"type\": \"object\",\n          \"properties\": {\n            \"city\":    { \"type\": \"string\" },\n            \"units\":  { \"type\": \"string\", \"enum\": [\"metric\", \"imperial\"], \"default\": \"metric\" }\n          },\n          \"required\": [\"city\"]\n        },\n        \"url\": \"https://api.weather.example.com/current\",\n        \"method\": \"GET\",\n        \"argument_mode\": \"query\"\n      }\n    ]\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/agent-query", "host": ["{{base_url}}"], "path": ["agent-query"] },
+            "description": "argument_mode: 'query' sends tool arguments as URL query parameters (?city=London&units=metric). Ideal for REST GET APIs."
+          },
+          "response": [
+            {
+              "name": "200 OK — weather fetched",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"output\": \"London today: 14°C, partly cloudy, wind 18 km/h from the west.\",\n  \"tool_traces\": [\n    { \"tool\": \"weather\", \"args\": { \"city\": \"London\", \"units\": \"metric\" }, \"result\": \"{ \\\"temp_c\\\": 14, \\\"condition\\\": \\\"Partly cloudy\\\", \\\"wind_kph\\\": 18 }\" }\n  ],\n  \"usage\": { \"input_tokens\": 56, \"output_tokens\": 22 },\n  \"provider\": \"openai_compatible\",\n  \"model\": \"gpt-4o\",\n  \"warnings\": [],\n  \"errors\": []\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "5.3 Multiple HTTP tools",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"input\": \"Check if user ID 42 exists, then send them a welcome email.\",\n  \"runtime\": {\n    \"tools\": [\n      {\n        \"name\": \"get_user\",\n        \"description\": \"Look up a user by ID\",\n        \"json_schema\": {\n          \"type\": \"object\",\n          \"properties\": { \"user_id\": { \"type\": \"integer\" } },\n          \"required\": [\"user_id\"]\n        },\n        \"url\": \"{{tool_url}}/users\",\n        \"method\": \"GET\",\n        \"argument_mode\": \"query\"\n      },\n      {\n        \"name\": \"send_email\",\n        \"description\": \"Send an email to a user\",\n        \"json_schema\": {\n          \"type\": \"object\",\n          \"properties\": {\n            \"to\":      { \"type\": \"string\" },\n            \"subject\": { \"type\": \"string\" },\n            \"body\":    { \"type\": \"string\" }\n          },\n          \"required\": [\"to\", \"subject\", \"body\"]\n        },\n        \"url\": \"{{tool_url}}/emails\",\n        \"method\": \"POST\",\n        \"argument_mode\": \"json\",\n        \"timeout_seconds\": 15\n      }\n    ]\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/agent-query", "host": ["{{base_url}}"], "path": ["agent-query"] },
+            "description": "Two tools with different methods and argument modes. The agent can call them in sequence (multi-hop). Each tool can have its own timeout."
+          },
+          "response": [
+            {
+              "name": "200 OK — multi-tool",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"output\": \"Found user John Smith (john@example.com) and sent him a welcome email.\",\n  \"tool_traces\": [\n    { \"tool\": \"get_user\", \"args\": { \"user_id\": 42 }, \"result\": \"{ \\\"name\\\": \\\"John Smith\\\", \\\"email\\\": \\\"john@example.com\\\" }\" },\n    { \"tool\": \"send_email\", \"args\": { \"to\": \"john@example.com\", \"subject\": \"Welcome!\", \"body\": \"Hi John...\" }, \"result\": \"{ \\\"sent\\\": true }\" }\n  ],\n  \"usage\": { \"input_tokens\": 122, \"output_tokens\": 28 },\n  \"provider\": \"openai_compatible\",\n  \"model\": \"gpt-4o\",\n  \"warnings\": [],\n  \"errors\": []\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "5.4 HTTP tool with auth headers",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"input\": \"Create a Linear ticket titled 'Investigate memory leak in worker process'.\",\n  \"runtime\": {\n    \"tools\": [\n      {\n        \"name\": \"create_ticket\",\n        \"description\": \"Create a Linear issue\",\n        \"json_schema\": {\n          \"type\": \"object\",\n          \"properties\": {\n            \"title\":    { \"type\": \"string\" },\n            \"priority\": { \"type\": \"string\", \"enum\": [\"urgent\", \"high\", \"medium\", \"low\"] }\n          },\n          \"required\": [\"title\"]\n        },\n        \"url\": \"https://api.linear.app/graphql\",\n        \"method\": \"POST\",\n        \"headers\": {\n          \"Authorization\": \"Bearer lin_api_your_token\",\n          \"Content-Type\": \"application/json\"\n        },\n        \"argument_mode\": \"json\"\n      }\n    ]\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/agent-query", "host": ["{{base_url}}"], "path": ["agent-query"] },
+            "description": "Tool-level headers are forwarded with every call to that tool's URL. Use for bearer tokens, API keys, or any fixed headers the tool service requires."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"output\": \"Created Linear ticket LIN-4821: 'Investigate memory leak in worker process' (priority: high).\",\n  \"tool_traces\": [\n    { \"tool\": \"create_ticket\", \"args\": { \"title\": \"Investigate memory leak in worker process\", \"priority\": \"high\" }, \"result\": \"{ \\\"id\\\": \\\"LIN-4821\\\" }\" }\n  ],\n  \"usage\": { \"input_tokens\": 74, \"output_tokens\": 28 },\n  \"provider\": \"openai_compatible\",\n  \"model\": \"gpt-4o\",\n  \"warnings\": [],\n  \"errors\": []\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "5.5 Isolated — no global tools, inline only",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"input\": \"Translate 'good morning' to German using the translation tool.\",\n  \"runtime\": {\n    \"use_global_tools\": false,\n    \"tools\": [\n      {\n        \"name\": \"translate\",\n        \"description\": \"Translate text to a target language\",\n        \"json_schema\": {\n          \"type\": \"object\",\n          \"properties\": {\n            \"text\":   { \"type\": \"string\" },\n            \"target\": { \"type\": \"string\" }\n          },\n          \"required\": [\"text\", \"target\"]\n        },\n        \"url\": \"https://api.translate.example.com/v1\",\n        \"method\": \"POST\",\n        \"argument_mode\": \"json\"\n      }\n    ]\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/agent-query", "host": ["{{base_url}}"], "path": ["agent-query"] },
+            "description": "use_global_tools: false means the agent starts with a blank tool registry. Only the tools defined in this request's runtime.tools are available. Good for sandboxed or restricted execution."
+          },
+          "response": [
+            {
+              "name": "200 OK — isolated toolset",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"output\": \"'Good morning' in German is 'Guten Morgen'.\",\n  \"tool_traces\": [\n    { \"tool\": \"translate\", \"args\": { \"text\": \"good morning\", \"target\": \"de\" }, \"result\": \"Guten Morgen\" }\n  ],\n  \"usage\": { \"input_tokens\": 58, \"output_tokens\": 14 },\n  \"provider\": \"openai_compatible\",\n  \"model\": \"gpt-4o\",\n  \"warnings\": [],\n  \"errors\": []\n}"
+            }
+          ]
+        }
+
+      ]
+    },
+
+    {
+      "name": "6 — Inline Contexts",
+      "description": "Inject background context (RAG results, company info, user profile, etc.) into the agent's system prompt. Can be static text or fetched from an HTTP endpoint per-request.",
+      "item": [
+
+        {
+          "name": "6.1 Static context — literal text",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"input\": \"What is our refund policy?\",\n  \"runtime\": {\n    \"contexts\": [\n      {\n        \"name\": \"company_policy\",\n        \"source\": \"static\",\n        \"mode\": \"static\",\n        \"text\": \"Acme Corp refund policy: Full refund within 30 days, no questions asked. After 30 days, store credit only. Non-refundable items: software licences, downloadable content.\"\n      }\n    ]\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/agent-query", "host": ["{{base_url}}"], "path": ["agent-query"] },
+            "description": "Static text is injected directly into the system prompt. No external calls. Best for small, known strings (company name, persona, rules)."
+          },
+          "response": [
+            {
+              "name": "200 OK — context injected",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"output\": \"Our refund policy offers a full refund within 30 days, no questions asked. After 30 days we can offer store credit. Note that software licences and downloadable content are non-refundable.\",\n  \"tool_traces\": [],\n  \"usage\": { \"input_tokens\": 72, \"output_tokens\": 44 },\n  \"provider\": \"openai_compatible\",\n  \"model\": \"gpt-4o\",\n  \"warnings\": [],\n  \"errors\": []\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "6.2 Static context with template variable",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"input\": \"Suggest a personalised welcome message for this user.\",\n  \"context\": {\n    \"username\": \"Alice\",\n    \"plan\": \"Pro\"\n  },\n  \"runtime\": {\n    \"contexts\": [\n      {\n        \"name\": \"user_context\",\n        \"mode\": \"static\",\n        \"text\": \"The current user is {username} on the {plan} plan.\"\n      }\n    ]\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/agent-query", "host": ["{{base_url}}"], "path": ["agent-query"] },
+            "description": "Curly-brace placeholders in context text are substituted from the 'context' dict. {username} → 'Alice', {plan} → 'Pro'. Unknown placeholders are left as-is (safe formatting)."
+          },
+          "response": [
+            {
+              "name": "200 OK — personalised",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"output\": \"Welcome back, Alice! As a Pro member you have access to unlimited exports, priority support, and our advanced analytics dashboard. Let us know if you need anything!\",\n  \"tool_traces\": [],\n  \"usage\": { \"input_tokens\": 56, \"output_tokens\": 38 },\n  \"provider\": \"openai_compatible\",\n  \"model\": \"gpt-4o\",\n  \"warnings\": [],\n  \"errors\": []\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "6.3 HTTP context — RAG / knowledge base (POST)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"input\": \"How do I configure SSO with Okta?\",\n  \"runtime\": {\n    \"contexts\": [\n      {\n        \"name\": \"product_docs\",\n        \"source\": \"rag\",\n        \"mode\": \"http\",\n        \"url\": \"{{rag_url}}\",\n        \"method\": \"POST\",\n        \"payload_template\": {\n          \"query\": \"{input}\",\n          \"top_k\": 5,\n          \"collection\": \"product-docs\"\n        },\n        \"max_chars\": 4000,\n        \"required\": true\n      }\n    ]\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/agent-query", "host": ["{{base_url}}"], "path": ["agent-query"] },
+            "description": "Fetches relevant docs from a RAG endpoint before calling the LLM. The gateway POSTs the payload_template (with {input} substituted) to the URL, then injects the response text into the system prompt. required: true means a fetch failure raises an error rather than silently continuing."
+          },
+          "response": [
+            {
+              "name": "200 OK — RAG context injected",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"output\": \"To configure SSO with Okta: 1) Go to Settings > Security > SSO. 2) Copy the SAML metadata URL from your Okta app. 3) Paste it into the 'IdP Metadata URL' field. 4) Map email attribute to user.email. 5) Save and test with a non-admin account first.\",\n  \"tool_traces\": [],\n  \"usage\": { \"input_tokens\": 312, \"output_tokens\": 78 },\n  \"provider\": \"openai_compatible\",\n  \"model\": \"gpt-4o\",\n  \"warnings\": [],\n  \"errors\": []\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "6.4 HTTP context — GET with query params",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"input\": \"Is user 42 on a paid plan?\",\n  \"context\": { \"user_id\": \"42\" },\n  \"runtime\": {\n    \"contexts\": [\n      {\n        \"name\": \"user_profile\",\n        \"source\": \"kv\",\n        \"mode\": \"http\",\n        \"url\": \"http://profile-api.internal/users\",\n        \"method\": \"GET\",\n        \"payload_template\": { \"id\": \"{user_id}\" }\n      }\n    ]\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/agent-query", "host": ["{{base_url}}"], "path": ["agent-query"] },
+            "description": "method: GET sends payload_template as query string (?id=42). The user_id comes from context dict via {user_id} substitution."
+          },
+          "response": [
+            {
+              "name": "200 OK — profile fetched",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"output\": \"Yes, user 42 (Sarah Connor) is on the Business plan, active since Jan 2024.\",\n  \"tool_traces\": [],\n  \"usage\": { \"input_tokens\": 88, \"output_tokens\": 22 },\n  \"provider\": \"openai_compatible\",\n  \"model\": \"gpt-4o\",\n  \"warnings\": [],\n  \"errors\": []\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "6.5 Multiple contexts — combined RAG + static",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"input\": \"Help me debug this Python error: AttributeError: 'NoneType' object has no attribute 'split'\",\n  \"runtime\": {\n    \"contexts\": [\n      {\n        \"name\": \"coding_style\",\n        \"mode\": \"static\",\n        \"text\": \"Always suggest type hints and guard clauses. Prefer early returns.\"\n      },\n      {\n        \"name\": \"codebase_docs\",\n        \"source\": \"rag\",\n        \"mode\": \"http\",\n        \"url\": \"{{rag_url}}\",\n        \"method\": \"POST\",\n        \"payload_template\": { \"query\": \"{input}\", \"top_k\": 3, \"collection\": \"code\" },\n        \"max_chars\": 3000\n      }\n    ]\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/agent-query", "host": ["{{base_url}}"], "path": ["agent-query"] },
+            "description": "Both contexts are injected in order. All [name] sections appear under 'Additional context:' in the system prompt. The model sees: coding_style rules + relevant code snippets from RAG."
+          },
+          "response": [
+            {
+              "name": "200 OK — multi-context",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"output\": \"The error means a variable is None when you try to call .split() on it. Add a guard clause:\\n\\ndef process(value: str | None) -> list:\\n    if value is None:\\n        return []\\n    return value.split()\",\n  \"tool_traces\": [],\n  \"usage\": { \"input_tokens\": 198, \"output_tokens\": 56 },\n  \"provider\": \"openai_compatible\",\n  \"model\": \"gpt-4o\",\n  \"warnings\": [],\n  \"errors\": []\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "6.6 Isolated — no global contexts, inline only",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"input\": \"Summarise this document for a non-technical audience.\",\n  \"runtime\": {\n    \"use_global_contexts\": false,\n    \"contexts\": [\n      {\n        \"name\": \"document\",\n        \"mode\": \"static\",\n        \"text\": \"TCP/IP is a suite of communication protocols used to interconnect network devices on the internet. It specifies how data should be packaged, addressed, transmitted, routed, and received.\"\n      }\n    ]\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/agent-query", "host": ["{{base_url}}"], "path": ["agent-query"] },
+            "description": "use_global_contexts: false starts from an empty context registry. Only the contexts defined here are injected. Prevents any server-side global context from leaking into this call."
+          },
+          "response": [
+            {
+              "name": "200 OK — isolated context",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"output\": \"TCP/IP is basically the rulebook that computers follow when they talk to each other over the internet — it decides how to package, address, send, and receive information.\",\n  \"tool_traces\": [],\n  \"usage\": { \"input_tokens\": 78, \"output_tokens\": 38 },\n  \"provider\": \"openai_compatible\",\n  \"model\": \"gpt-4o\",\n  \"warnings\": [],\n  \"errors\": []\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "6.7 ContextForge — HTTP context source",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"input\": \"Explain our product roadmap for Q2.\",\n  \"runtime\": {\n    \"contexts\": [\n      {\n        \"name\": \"contextforge\",\n        \"source\": \"context_forge\",\n        \"mode\": \"http\",\n        \"url\": \"http://contextforge.internal/api/context\",\n        \"method\": \"POST\",\n        \"headers\": {\n          \"Authorization\": \"Bearer cf-api-key\",\n          \"X-Workspace\": \"acme-corp\"\n        },\n        \"payload_template\": {\n          \"query\": \"{input}\",\n          \"workspace\": \"product\"\n        },\n        \"max_chars\": 6000,\n        \"required\": false\n      }\n    ]\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/agent-query", "host": ["{{base_url}}"], "path": ["agent-query"] },
+            "description": "ContextForge inline — passes the query to your ContextForge server and injects the result. Alternatively configure CONTEXTFORGE_URL + CONTEXTFORGE_API_KEY in .env to use globally."
+          },
+          "response": [
+            {
+              "name": "200 OK — ContextForge injected",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"output\": \"Q2 roadmap highlights: Launch multi-region support (April), Ship mobile app v2 (May), GA of the API gateway (June). Three major features, 12 bug-fix releases planned.\",\n  \"tool_traces\": [],\n  \"usage\": { \"input_tokens\": 280, \"output_tokens\": 48 },\n  \"provider\": \"openai_compatible\",\n  \"model\": \"gpt-4o\",\n  \"warnings\": [],\n  \"errors\": []\n}"
+            }
+          ]
+        }
+
+      ]
+    },
+
+    {
+      "name": "7 — Kitchen Sink (Combined)",
+      "description": "Full combinations showing how every feature works together in a single request.",
+      "item": [
+
+        {
+          "name": "7.1 Profile + named presets + inline tool + inline context",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"input\": \"Search for the latest AI papers, get today's weather in SF, and compose a morning briefing.\",\n  \"profile\": \"researcher\",\n  \"context\": {\n    \"system_prompt\": \"You are a morning briefing assistant. Be concise, structured, and upbeat.\",\n    \"user\": \"Philip\"\n  },\n  \"options\": {\n    \"temperature\": 0.7\n  },\n  \"runtime\": {\n    \"namespace\": \"briefing\",\n    \"mcp_namespaces\": [\"search\"],\n    \"context_names\": [\"company_info\"],\n    \"tools\": [\n      {\n        \"name\": \"weather\",\n        \"description\": \"Get current weather\",\n        \"json_schema\": {\n          \"type\": \"object\",\n          \"properties\": { \"city\": { \"type\": \"string\" } },\n          \"required\": [\"city\"]\n        },\n        \"url\": \"https://api.weather.example.com/current\",\n        \"method\": \"GET\",\n        \"argument_mode\": \"query\"\n      }\n    ],\n    \"contexts\": [\n      {\n        \"name\": \"user_prefs\",\n        \"mode\": \"static\",\n        \"text\": \"User {user} prefers bullet-point briefings, no longer than 200 words.\"\n      }\n    ]\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/agent-query", "host": ["{{base_url}}"], "path": ["agent-query"] },
+            "description": "Every feature at once:\n- Profile 'researcher' (from .env) auto-includes its presets\n- Named MCP namespace 'search' (from .env)\n- Named context 'company_info' (from .env)\n- One-off inline HTTP tool 'weather'\n- One-off inline static context 'user_prefs' with template\n- Top-level namespace 'briefing' prefixes all inline registrations\n- System prompt via context.system_prompt\n- temperature option forwarded to provider"
+          },
+          "response": [
+            {
+              "name": "200 OK — full combined",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"output\": \"Good morning, Philip!\\n\\n**AI Papers (top 3):**\\n- FlashAttention-3 achieves 2.4x speedup\\n- Mamba-2 surpasses Transformers on long sequences\\n- Ring Attention enables 1M token context\\n\\n**SF Weather:** 18°C, sunny\\n\\n**Acme Corp Reminder:** Q2 planning meeting at 10am.\",\n  \"tool_traces\": [\n    { \"tool\": \"search.semantic_search\", \"args\": { \"query\": \"latest AI papers\" }, \"result\": \"[3 papers]\" },\n    { \"tool\": \"briefing.weather\", \"args\": { \"city\": \"San Francisco\" }, \"result\": \"{ \\\"temp_c\\\": 18, \\\"condition\\\": \\\"Sunny\\\" }\" }\n  ],\n  \"usage\": { \"input_tokens\": 248, \"output_tokens\": 86 },\n  \"provider\": \"openai_compatible\",\n  \"model\": \"gpt-4o\",\n  \"warnings\": [],\n  \"errors\": []\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "7.2 Fully isolated — no globals, all inline",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"input\": \"Check stock price for AAPL and send the result to Slack #trading.\",\n  \"runtime\": {\n    \"use_global_tools\": false,\n    \"use_global_contexts\": false,\n    \"tools\": [\n      {\n        \"name\": \"stock_price\",\n        \"description\": \"Get the current stock price for a ticker symbol\",\n        \"json_schema\": {\n          \"type\": \"object\",\n          \"properties\": { \"ticker\": { \"type\": \"string\" } },\n          \"required\": [\"ticker\"]\n        },\n        \"url\": \"https://api.finance.example.com/price\",\n        \"method\": \"GET\",\n        \"argument_mode\": \"query\"\n      },\n      {\n        \"name\": \"slack_post\",\n        \"description\": \"Post a message to a Slack channel\",\n        \"json_schema\": {\n          \"type\": \"object\",\n          \"properties\": {\n            \"channel\": { \"type\": \"string\" },\n            \"text\":    { \"type\": \"string\" }\n          },\n          \"required\": [\"channel\", \"text\"]\n        },\n        \"url\": \"https://hooks.slack.com/services/T00/B00/your-webhook\",\n        \"method\": \"POST\",\n        \"argument_mode\": \"json\"\n      }\n    ],\n    \"contexts\": [\n      {\n        \"name\": \"trading_rules\",\n        \"mode\": \"static\",\n        \"text\": \"Always include the percentage change from previous close when reporting prices.\"\n      }\n    ]\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/agent-query", "host": ["{{base_url}}"], "path": ["agent-query"] },
+            "description": "Completely sandboxed execution: no global tools, no global contexts. The agent only has the two tools and one context defined in this request. Nothing from .env registries leaks in."
+          },
+          "response": [
+            {
+              "name": "200 OK — sandboxed",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"output\": \"Posted to #trading: AAPL is trading at $212.45 (+1.3% from yesterday's close of $209.73).\",\n  \"tool_traces\": [\n    { \"tool\": \"stock_price\", \"args\": { \"ticker\": \"AAPL\" }, \"result\": \"{ \\\"price\\\": 212.45, \\\"prev_close\\\": 209.73 }\" },\n    { \"tool\": \"slack_post\", \"args\": { \"channel\": \"#trading\", \"text\": \"AAPL: $212.45 (+1.3%)\" }, \"result\": \"ok\" }\n  ],\n  \"usage\": { \"input_tokens\": 134, \"output_tokens\": 38 },\n  \"provider\": \"openai_compatible\",\n  \"model\": \"gpt-4o\",\n  \"warnings\": [],\n  \"errors\": []\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "7.3 Inline MCP + inline tool + RAG context",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"input\": \"Look up our internal docs on deployment, then create a JIRA ticket for the missing step you find.\",\n  \"context\": {\n    \"system_prompt\": \"You are a DevOps assistant. Be precise and reference document sections.\"\n  },\n  \"runtime\": {\n    \"mcp_servers\": [\n      {\n        \"url\": \"http://jira-mcp.internal/mcp\",\n        \"namespace\": \"jira\",\n        \"transport\": \"streamable_http\",\n        \"headers\": { \"Authorization\": \"Bearer jira-token\" }\n      }\n    ],\n    \"tools\": [\n      {\n        \"name\": \"create_jira_comment\",\n        \"description\": \"Add a comment to an existing JIRA ticket\",\n        \"json_schema\": {\n          \"type\": \"object\",\n          \"properties\": {\n            \"issue_id\": { \"type\": \"string\" },\n            \"comment\":  { \"type\": \"string\" }\n          },\n          \"required\": [\"issue_id\", \"comment\"]\n        },\n        \"url\": \"http://jira-api.internal/rest/api/3/issue/{issue_id}/comment\",\n        \"method\": \"POST\",\n        \"headers\": { \"Authorization\": \"Bearer jira-token\" },\n        \"argument_mode\": \"json\"\n      }\n    ],\n    \"contexts\": [\n      {\n        \"name\": \"deployment_docs\",\n        \"source\": \"rag\",\n        \"mode\": \"http\",\n        \"url\": \"{{rag_url}}\",\n        \"method\": \"POST\",\n        \"payload_template\": { \"query\": \"deployment process steps\", \"top_k\": 5 },\n        \"max_chars\": 5000\n      }\n    ]\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/agent-query", "host": ["{{base_url}}"], "path": ["agent-query"] },
+            "description": "Real-world DevOps scenario: RAG fetches deployment docs → agent identifies missing step → uses JIRA MCP to create a ticket → uses inline HTTP tool to add a doc reference comment."
+          },
+          "response": [
+            {
+              "name": "200 OK — DevOps scenario",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"output\": \"Found the deployment docs. Section 4.3 (Database migration) is missing a rollback step. Created JIRA ticket DEV-2201 and added a comment linking to the doc section.\",\n  \"tool_traces\": [\n    { \"tool\": \"jira.create_issue\", \"args\": { \"summary\": \"Missing rollback step in DB migration docs\", \"priority\": \"Medium\" }, \"result\": \"{ \\\"id\\\": \\\"DEV-2201\\\" }\" },\n    { \"tool\": \"create_jira_comment\", \"args\": { \"issue_id\": \"DEV-2201\", \"comment\": \"See docs section 4.3\" }, \"result\": \"ok\" }\n  ],\n  \"usage\": { \"input_tokens\": 342, \"output_tokens\": 52 },\n  \"provider\": \"openai_compatible\",\n  \"model\": \"gpt-4o\",\n  \"warnings\": [],\n  \"errors\": []\n}"
+            }
+          ]
+        }
+
+      ]
+    },
+
+    {
+      "name": "8 — Streaming (SSE)",
+      "description": "POST /agent-query/stream returns Server-Sent Events. Same request body as /agent-query. Events: 'chunk' (text delta), 'tool_call', 'done', 'warning', 'error'.",
+      "item": [
+
+        {
+          "name": "8.1 Minimal stream",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"input\": \"Write a short poem about the ocean.\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/agent-query/stream", "host": ["{{base_url}}"], "path": ["agent-query", "stream"] },
+            "description": "Streaming endpoint. Response Content-Type: text/event-stream. Each line is a SSE event:\n  event: chunk\n  data: {\"delta\":\"The \"}\n\n  event: chunk\n  data: {\"delta\":\"ocean...\"}\n\n  event: done\n  data: {\"type\":\"done\"}"
+          },
+          "response": [
+            {
+              "name": "200 OK — SSE stream",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "text/event-stream" },
+                { "key": "Cache-Control", "value": "no-cache" },
+                { "key": "X-Accel-Buffering", "value": "no" }
+              ],
+              "body": "event: chunk\ndata: {\"type\": \"chunk\", \"delta\": \"The \"}\n\nevent: chunk\ndata: {\"type\": \"chunk\", \"delta\": \"ocean \"}\n\nevent: chunk\ndata: {\"type\": \"chunk\", \"delta\": \"breathes \"}\n\nevent: chunk\ndata: {\"type\": \"chunk\", \"delta\": \"in salt \"}\n\nevent: chunk\ndata: {\"type\": \"chunk\", \"delta\": \"and tide...\"}\n\nevent: done\ndata: {\"type\": \"done\", \"usage\": {\"input_tokens\": 8, \"output_tokens\": 22}}\n"
+            }
+          ]
+        },
+
+        {
+          "name": "8.2 Stream with system prompt and profile",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"input\": \"Explain how async/await works in Python.\",\n  \"profile\": \"claude\",\n  \"context\": {\n    \"system_prompt\": \"You are a Python expert. Use code examples.\"\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/agent-query/stream", "host": ["{{base_url}}"], "path": ["agent-query", "stream"] },
+            "description": "Stream with Anthropic Claude profile. Same profile/context support as sync endpoint."
+          },
+          "response": [
+            {
+              "name": "200 OK — Claude streaming",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "text/event-stream" }],
+              "body": "event: chunk\ndata: {\"type\": \"chunk\", \"delta\": \"Async/await \"}\n\nevent: chunk\ndata: {\"type\": \"chunk\", \"delta\": \"in Python \"}\n\nevent: chunk\ndata: {\"type\": \"chunk\", \"delta\": \"allows concurrent I/O...\"}\n\nevent: done\ndata: {\"type\": \"done\", \"usage\": {\"input_tokens\": 28, \"output_tokens\": 145}}\n"
+            }
+          ]
+        },
+
+        {
+          "name": "8.3 Stream with inline context",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"input\": \"What are the key takeaways?\",\n  \"runtime\": {\n    \"contexts\": [\n      {\n        \"name\": \"source_text\",\n        \"mode\": \"static\",\n        \"text\": \"The 2025 State of AI report found that: 87% of enterprises now use LLMs in production; inference costs dropped 73% YoY; open-source models captured 34% of enterprise usage; hallucination rates dropped from 18% to 6% with RAG.\"\n      }\n    ]\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/agent-query/stream", "host": ["{{base_url}}"], "path": ["agent-query", "stream"] },
+            "description": "Context injection works identically in the streaming endpoint. The context is fetched/resolved before streaming begins."
+          },
+          "response": [
+            {
+              "name": "200 OK — streaming with context",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "text/event-stream" }],
+              "body": "event: chunk\ndata: {\"type\": \"chunk\", \"delta\": \"Key \"}\n\nevent: chunk\ndata: {\"type\": \"chunk\", \"delta\": \"takeaways: LLM \"}\n\nevent: chunk\ndata: {\"type\": \"chunk\", \"delta\": \"adoption is near-universal...\"}\n\nevent: done\ndata: {\"type\": \"done\", \"usage\": {\"input_tokens\": 94, \"output_tokens\": 58}}\n"
+            }
+          ]
+        },
+
+        {
+          "name": "8.4 Stream with named MCP namespace",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"input\": \"Search for OpenAI news from the last 7 days and stream a summary.\",\n  \"runtime\": {\n    \"mcp_namespaces\": [\"search\"]\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/agent-query/stream", "host": ["{{base_url}}"], "path": ["agent-query", "stream"] },
+            "description": "MCP session is opened before streaming begins and torn down when the client disconnects or the stream ends. Tool calls happen synchronously mid-stream and are surfaced as 'tool_call' events."
+          },
+          "response": [
+            {
+              "name": "200 OK — MCP + stream",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "text/event-stream" }],
+              "body": "event: tool_call\ndata: {\"type\": \"tool_call\", \"tool_call\": {\"name\": \"search.news_search\", \"arguments\": {\"query\": \"OpenAI\", \"days\": 7}}}\n\nevent: chunk\ndata: {\"type\": \"chunk\", \"delta\": \"This week, OpenAI \"}\n\nevent: chunk\ndata: {\"type\": \"chunk\", \"delta\": \"released GPT-5 and \"}\n\nevent: chunk\ndata: {\"type\": \"chunk\", \"delta\": \"announced $40B in new funding...\"}\n\nevent: done\ndata: {\"type\": \"done\", \"usage\": {\"input_tokens\": 88, \"output_tokens\": 64}}\n"
+            }
+          ]
+        },
+
+        {
+          "name": "8.5 Stream with warning event",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"input\": \"Tell me about quantum computing.\",\n  \"runtime\": {\n    \"mcp_namespaces\": [\"nonexistent_server\"]\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/agent-query/stream", "host": ["{{base_url}}"], "path": ["agent-query", "stream"] },
+            "description": "When a named MCP namespace is not found in settings, the stream starts with a 'warning' event, then continues normally without the missing tools."
+          },
+          "response": [
+            {
+              "name": "200 OK — warning then content",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "text/event-stream" }],
+              "body": "event: warning\ndata: {\"warnings\": [\"MCP namespace 'nonexistent_server' not found in MCP_SERVERS settings — skipped\"]}\n\nevent: chunk\ndata: {\"type\": \"chunk\", \"delta\": \"Quantum computing uses \"}\n\nevent: chunk\ndata: {\"type\": \"chunk\", \"delta\": \"qubits instead of classical bits...\"}\n\nevent: done\ndata: {\"type\": \"done\"}\n"
+            }
+          ]
+        }
+
+      ]
+    },
+
+    {
+      "name": "9 — Error Cases",
+      "description": "Expected error responses and non-fatal warning scenarios.",
+      "item": [
+
+        {
+          "name": "9.1 Dynamic registration disabled — 403",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"input\": \"Use this custom tool.\",\n  \"runtime\": {\n    \"tools\": [\n      {\n        \"name\": \"my_tool\",\n        \"description\": \"A tool\",\n        \"url\": \"http://example.com/tool\",\n        \"method\": \"POST\",\n        \"argument_mode\": \"json\"\n      }\n    ]\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/agent-query", "host": ["{{base_url}}"], "path": ["agent-query"] },
+            "description": "When ALLOW_DYNAMIC_RUNTIME_REGISTRATION=false in .env, any request that tries to add inline tools, MCP servers, or contexts gets a 403. Set to 'true' (the default) to allow it."
+          },
+          "response": [
+            {
+              "name": "403 Forbidden",
+              "status": "Forbidden",
+              "code": 403,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"detail\": \"Dynamic runtime registration is disabled by gateway settings.\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "9.2 Unknown MCP namespace — warning, not error",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"input\": \"Hello.\",\n  \"runtime\": {\n    \"mcp_namespaces\": [\"does_not_exist\"]\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/agent-query", "host": ["{{base_url}}"], "path": ["agent-query"] },
+            "description": "A namespace not found in MCP_SERVERS settings is skipped with a warning. The request succeeds — warnings array in the response tells you what was skipped."
+          },
+          "response": [
+            {
+              "name": "200 OK with warning",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"output\": \"Hello! How can I help you today?\",\n  \"tool_traces\": [],\n  \"usage\": { \"input_tokens\": 5, \"output_tokens\": 9 },\n  \"provider\": \"openai_compatible\",\n  \"model\": \"gpt-4o\",\n  \"warnings\": [\"MCP namespace 'does_not_exist' not found in MCP_SERVERS settings — skipped\"],\n  \"errors\": []\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "9.3 Unknown context name — warning, not error",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"input\": \"What can you tell me?\",\n  \"runtime\": {\n    \"context_names\": [\"undefined_context\"]\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/agent-query", "host": ["{{base_url}}"], "path": ["agent-query"] },
+            "description": "Same pattern as unknown MCP namespace — missing context names are skipped with a warning, not an error. Unless the context is marked required: true."
+          },
+          "response": [
+            {
+              "name": "200 OK with warning",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"output\": \"I can help with questions, analysis, coding, writing, and much more!\",\n  \"tool_traces\": [],\n  \"usage\": { \"input_tokens\": 7, \"output_tokens\": 16 },\n  \"provider\": \"openai_compatible\",\n  \"model\": \"gpt-4o\",\n  \"warnings\": [\"Context name 'undefined_context' not found in NAMED_CONTEXTS settings — skipped\"],\n  \"errors\": []\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "9.4 MCP server connection failure — warning, not error",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"input\": \"Search for something.\",\n  \"runtime\": {\n    \"mcp_servers\": [\n      {\n        \"url\": \"http://offline-mcp.internal/mcp\",\n        \"namespace\": \"broken\",\n        \"transport\": \"streamable_http\"\n      }\n    ]\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/agent-query", "host": ["{{base_url}}"], "path": ["agent-query"] },
+            "description": "If an inline MCP server is unreachable, the connection error is collected as a warning. The request proceeds without those tools. The agent's response may reflect that the tool was unavailable."
+          },
+          "response": [
+            {
+              "name": "200 OK — MCP failure degraded gracefully",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"output\": \"I wasn't able to perform a search as the search service appears to be unavailable. Please try again later.\",\n  \"tool_traces\": [],\n  \"usage\": { \"input_tokens\": 18, \"output_tokens\": 22 },\n  \"provider\": \"openai_compatible\",\n  \"model\": \"gpt-4o\",\n  \"warnings\": [\"Inline MCP server at 'http://offline-mcp.internal/mcp' (namespace 'broken') failed to connect: ConnectionRefusedError\"],\n  \"errors\": []\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "9.5 HTTP context with no URL — skipped with warning",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"input\": \"Tell me about our company.\",\n  \"runtime\": {\n    \"contexts\": [\n      {\n        \"name\": \"company_info\",\n        \"mode\": \"http\"\n      }\n    ]\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/agent-query", "host": ["{{base_url}}"], "path": ["agent-query"] },
+            "description": "A context with mode: 'http' but no url is silently skipped with a warning. Useful to catch misconfigured payloads during development."
+          },
+          "response": [
+            {
+              "name": "200 OK — context skipped",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"output\": \"I don't have specific information about your company loaded right now.\",\n  \"tool_traces\": [],\n  \"usage\": { \"input_tokens\": 9, \"output_tokens\": 14 },\n  \"provider\": \"openai_compatible\",\n  \"model\": \"gpt-4o\",\n  \"warnings\": [\"Context 'company_info' skipped: mode=http but no url provided\"],\n  \"errors\": []\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "9.6 Provider error (bad API key) — 500 with errors array",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"input\": \"Hello.\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/agent-query", "host": ["{{base_url}}"], "path": ["agent-query"] },
+            "description": "When the upstream provider returns an auth or API error, the gateway catches it as a GatewayError and returns it in the errors array with an appropriate HTTP status code."
+          },
+          "response": [
+            {
+              "name": "401 — provider auth error",
+              "status": "Unauthorized",
+              "code": 401,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"output\": \"\",\n  \"tool_traces\": [],\n  \"usage\": {},\n  \"provider\": \"openai_compatible\",\n  \"model\": null,\n  \"warnings\": [],\n  \"errors\": [\"[openai_compatible] Authentication failed: Incorrect API key provided\"]\n}"
+            }
+          ]
+        }
+
+      ]
+    },
+
+    {
+      "name": "10 — Provider credentials (BYOK)",
+      "description": "Optional `provider_credentials` on the request body overrides the resolved LLM api_key / model / base_url for that call only.\n\nRequires server env: ALLOW_PER_REQUEST_PROVIDER_CREDENTIALS=true (default false).\n\nPostman variable `{{openai_key}}` is NOT magic: it only substitutes into the JSON so you do not hard-code secrets. The gateway still receives that value inside `provider_credentials.api_key` (BYOK path). If you omit `provider_credentials` entirely, the gateway uses OPENAI_API_KEY (or profile keys) from its own .env — no Postman variable involved.\n\nSecurity: keys in JSON bodies are logged by many proxies — use only behind your own auth, or prefer .env + AGENT_PROFILES.",
+      "item": [
+
+        {
+          "name": "10.1 BYOK — OpenAI key + model + base_url",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"input\": \"Say hello in one sentence.\",\n  \"profile\": \"default\",\n  \"provider_credentials\": {\n    \"api_key\": \"{{openai_key}}\",\n    \"model\": \"gpt-4o-mini\",\n    \"base_url\": \"https://api.openai.com/v1\"\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/agent-query", "host": ["{{base_url}}"], "path": ["agent-query"] },
+            "description": "Full override for OpenAI-compatible routing. Omit base_url to use the profile/env default base URL.\n\nSet ALLOW_PER_REQUEST_PROVIDER_CREDENTIALS=true on the gateway before sending."
+          },
+          "response": [
+            {
+              "name": "200 OK — used caller key",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"output\": \"Hello — glad to meet you!\",\n  \"tool_traces\": [],\n  \"usage\": { \"input_tokens\": 12, \"output_tokens\": 8 },\n  \"provider\": \"openai_compatible\",\n  \"model\": \"gpt-4o-mini\",\n  \"warnings\": [],\n  \"errors\": []\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "10.2 BYOK — api_key only (keep profile model)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"input\": \"What is 2+2?\",\n  \"profile\": \"default\",\n  \"provider_credentials\": {\n    \"api_key\": \"{{openai_key}}\"\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/agent-query", "host": ["{{base_url}}"], "path": ["agent-query"] },
+            "description": "Only api_key is sent; model and base_url stay whatever the profile + env resolved (e.g. gpt-4o from DEFAULT_OPENAI_MODEL)."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"output\": \"2 + 2 equals 4.\",\n  \"tool_traces\": [],\n  \"usage\": { \"input_tokens\": 8, \"output_tokens\": 6 },\n  \"provider\": \"openai_compatible\",\n  \"model\": \"gpt-4o\",\n  \"warnings\": [],\n  \"errors\": []\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "10.3 BYOK — Groq / custom OpenAI-compatible base",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"input\": \"Name one benefit of fast inference.\",\n  \"profile\": \"default\",\n  \"provider_credentials\": {\n    \"api_key\": \"{{groq_key}}\",\n    \"base_url\": \"https://api.groq.com/openai/v1\",\n    \"model\": \"llama-3.3-70b-versatile\"\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/agent-query", "host": ["{{base_url}}"], "path": ["agent-query"] },
+            "description": "profile still selects built-in openai_compatible adapter; credentials override point traffic at Groq (or any OpenAI-compatible endpoint) for this request only."
+          },
+          "response": [
+            {
+              "name": "200 OK — Groq",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"output\": \"Lower latency improves interactive apps and reduces user wait time.\",\n  \"tool_traces\": [],\n  \"usage\": { \"input_tokens\": 14, \"output_tokens\": 12 },\n  \"provider\": \"openai_compatible\",\n  \"model\": \"llama-3.3-70b-versatile\",\n  \"warnings\": [],\n  \"errors\": []\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "10.4 BYOK — Anthropic key (model optional)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"input\": \"Reply with exactly: pong\",\n  \"profile\": \"claude\",\n  \"provider_credentials\": {\n    \"api_key\": \"{{anthropic_key}}\",\n    \"model\": \"claude-sonnet-4-20250514\"\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/agent-query", "host": ["{{base_url}}"], "path": ["agent-query"] },
+            "description": "For anthropic profile, api_key and model override env/profile. base_url in provider_credentials is ignored by the Anthropic SDK adapter."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"output\": \"pong\",\n  \"tool_traces\": [],\n  \"usage\": { \"input_tokens\": 10, \"output_tokens\": 2 },\n  \"provider\": \"anthropic\",\n  \"model\": \"claude-sonnet-4-20250514\",\n  \"warnings\": [],\n  \"errors\": []\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "10.5 BYOK — streaming endpoint",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"input\": \"Count from 1 to 3 slowly.\",\n  \"provider_credentials\": {\n    \"api_key\": \"{{openai_key}}\",\n    \"model\": \"gpt-4o-mini\"\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/agent-query/stream", "host": ["{{base_url}}"], "path": ["agent-query", "stream"] },
+            "description": "Same provider_credentials apply to /agent-query/stream. Response is text/event-stream."
+          },
+          "response": [
+            {
+              "name": "200 OK — SSE",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "text/event-stream" }],
+              "body": "event: chunk\ndata: {\"type\": \"chunk\", \"delta\": \"1...\"}\n\nevent: chunk\ndata: {\"type\": \"chunk\", \"delta\": \" 2...\"}\n\nevent: done\ndata: {\"type\": \"done\"}\n"
+            }
+          ]
+        },
+
+        {
+          "name": "10.6 BYOK disabled — 403 Forbidden",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"input\": \"Hello\",\n  \"provider_credentials\": {\n    \"api_key\": \"{{openai_key}}\"\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/agent-query", "host": ["{{base_url}}"], "path": ["agent-query"] },
+            "description": "Default gateway: ALLOW_PER_REQUEST_PROVIDER_CREDENTIALS=false. Any non-empty credential field triggers 403.\n\nEnable in .env: ALLOW_PER_REQUEST_PROVIDER_CREDENTIALS=true"
+          },
+          "response": [
+            {
+              "name": "403 Forbidden",
+              "status": "Forbidden",
+              "code": 403,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"detail\": \"Per-request provider credentials are disabled by gateway settings.\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "10.7 Empty provider_credentials — no gate",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"input\": \"Hi\",\n  \"provider_credentials\": {}\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/agent-query", "host": ["{{base_url}}"], "path": ["agent-query"] },
+            "description": "An empty object (or all fields null/omitted) does not count as BYOK — allowed even when ALLOW_PER_REQUEST_PROVIDER_CREDENTIALS=false."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"output\": \"Hi! How can I help?\",\n  \"tool_traces\": [],\n  \"usage\": { \"input_tokens\": 4, \"output_tokens\": 7 },\n  \"provider\": \"openai_compatible\",\n  \"model\": \"gpt-4o\",\n  \"warnings\": [],\n  \"errors\": []\n}"
+            }
+          ]
+        }
+
+      ]
+    }
+
+  ]
+}
