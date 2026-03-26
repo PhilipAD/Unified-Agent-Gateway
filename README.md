@@ -1,5 +1,5 @@
 <h1 align="center">
-  <img src="assets/logo.jpg" alt="Unified Agent Gateway" width="80" style="vertical-align: middle; border-radius: 16px;"><br><br>
+  <img src="https://raw.githubusercontent.com/PhilipAD/Unified-Agent-Gateway/main/assets/logo.jpg" alt="Unified Agent Gateway" width="80" style="vertical-align: middle; border-radius: 16px;"><br><br>
   Unified Agent Gateway
 </h1>
 

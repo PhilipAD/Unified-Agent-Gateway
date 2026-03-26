@@ -13,6 +13,14 @@ _Changes that are merged to `main` but not yet released._
 
 ---
 
+## [0.2.1] — 2026-03-26
+
+### Fixed
+
+- `README.md` — Convert relative `assets/logo.jpg` image path to absolute raw GitHub URL so the logo renders correctly on PyPI.
+
+---
+
 ## [0.2.0] — 2026-03-26
 
 Full provider coverage, pip-installable package with `uag` CLI, and OSS hardening.
@@ -126,6 +134,7 @@ Initial public release.
 - `.env.example` — Fully documented environment variable reference.
 - `pyproject.toml` — Hatchling build, ruff config, pytest config.
 
-[Unreleased]: https://github.com/PhilipAD/Unified-Agent-Gateway/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/PhilipAD/Unified-Agent-Gateway/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/PhilipAD/Unified-Agent-Gateway/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/PhilipAD/Unified-Agent-Gateway/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/PhilipAD/Unified-Agent-Gateway/releases/tag/v0.1.0
