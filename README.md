@@ -77,21 +77,26 @@ uag chat "Explain ML" --stream
 uag providers
 ```
 
-**Mode 2 — Python** (embed in your app)
+**Mode 2 — Python** (embed in your app, swap providers with one string)
 ```python
 from runtime.router import create_provider, resolve_provider_config
 from config.settings import ProviderSettings, GatewaySettings
 from core.agent_loop import AgentLoop
 from core.types import NormalizedMessage, Role
 
-cfg = resolve_provider_config(
-    ProviderSettings(), GatewaySettings(), profile="claude"
-)
-loop = AgentLoop(provider=create_provider(cfg))
-response = await loop.run_conversation([
-    NormalizedMessage(role=Role.USER, content="Search and summarise")
-])
-print(response.messages[-1].content)
+provider_settings = ProviderSettings()
+gateway_settings = GatewaySettings()
+
+messages = [NormalizedMessage(role=Role.USER, content="Search and summarise")]
+
+# Switch provider by changing one argument — code is identical
+for profile in ["default", "claude", "gemini", "fast", "deep", "grok"]:
+    cfg = resolve_provider_config(
+        provider_settings, gateway_settings, profile=profile
+    )
+    loop = AgentLoop(provider=create_provider(cfg))
+    response = await loop.run_conversation(messages)
+    print(f"[{cfg.provider_name}] {response.messages[-1].content}")
 ```
 
 **Mode 3 — HTTP / REST** (language-agnostic)
