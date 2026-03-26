@@ -6,14 +6,23 @@ from typing import Dict, Optional, Type
 from config.settings import AgentProfile, GatewaySettings, ProviderSettings
 from providers.anthropic import AnthropicProvider
 from providers.base import BaseProvider
+from providers.deepseek import DeepSeekProvider
 from providers.gemini import GeminiProvider
+from providers.groq import GroqProvider
+from providers.mistral import MistralProvider
 from providers.openai_compatible import OpenAICompatibleProvider
+from providers.openai_responses import OpenAIResponsesProvider
+from providers.xai import XAIProvider
 
-# Built-in provider registry — maps provider_name -> class
 PROVIDERS: Dict[str, Type[BaseProvider]] = {
     "openai_compatible": OpenAICompatibleProvider,
+    "openai_responses": OpenAIResponsesProvider,
     "anthropic": AnthropicProvider,
     "gemini": GeminiProvider,
+    "groq": GroqProvider,
+    "deepseek": DeepSeekProvider,
+    "mistral": MistralProvider,
+    "xai": XAIProvider,
 }
 
 
@@ -69,9 +78,13 @@ def resolve_provider_config(
             base_url=agent_profile.base_url or preset.base_url,
         )
 
-    # Built-in provider defaults
     defaults: Dict[str, dict] = {
         "openai_compatible": {
+            "api_key": provider_settings.OPENAI_API_KEY or "",
+            "model": provider_settings.DEFAULT_OPENAI_MODEL,
+            "base_url": provider_settings.OPENAI_BASE_URL,
+        },
+        "openai_responses": {
             "api_key": provider_settings.OPENAI_API_KEY or "",
             "model": provider_settings.DEFAULT_OPENAI_MODEL,
             "base_url": provider_settings.OPENAI_BASE_URL,
@@ -85,6 +98,26 @@ def resolve_provider_config(
             "api_key": provider_settings.GOOGLE_API_KEY or "",
             "model": provider_settings.DEFAULT_GEMINI_MODEL,
             "base_url": None,
+        },
+        "groq": {
+            "api_key": provider_settings.GROQ_API_KEY or "",
+            "model": provider_settings.DEFAULT_GROQ_MODEL,
+            "base_url": provider_settings.GROQ_BASE_URL,
+        },
+        "deepseek": {
+            "api_key": provider_settings.DEEPSEEK_API_KEY or "",
+            "model": provider_settings.DEFAULT_DEEPSEEK_MODEL,
+            "base_url": provider_settings.DEEPSEEK_BASE_URL,
+        },
+        "mistral": {
+            "api_key": provider_settings.MISTRAL_API_KEY or "",
+            "model": provider_settings.DEFAULT_MISTRAL_MODEL,
+            "base_url": provider_settings.MISTRAL_BASE_URL,
+        },
+        "xai": {
+            "api_key": provider_settings.XAI_API_KEY or "",
+            "model": provider_settings.DEFAULT_XAI_MODEL,
+            "base_url": provider_settings.XAI_BASE_URL,
         },
     }
 

@@ -13,6 +13,47 @@ _Changes that are merged to `main` but not yet released._
 
 ---
 
+## [0.2.0] — 2026-03-26
+
+Full provider coverage: 8 dedicated adapters with deep integration of each provider's agent capabilities.
+
+### Added
+
+**New Providers**
+- `providers/openai_responses.py` — OpenAI Responses API adapter with built-in tools (web search, file search, code interpreter, computer use, image generation), remote MCP support, reasoning effort/summary, stateful sessions (`previous_response_id`), and detailed usage tracking (cached/reasoning tokens).
+- `providers/groq.py` — Dedicated Groq adapter with compound models (`compound-beta`/`compound-beta-mini`), built-in tools (browser_search, code_interpreter, web_search), reasoning (format, effort, include), documents, search settings, citations/annotations, `executed_tools` structured data, `usage_breakdown`, and `x_groq` metadata.
+- `providers/deepseek.py` — Dedicated DeepSeek adapter with `reasoning_content` extraction for `deepseek-reasoner`, `thinking` parameter with DX helpers (bool/string/dict normalization), multi-turn reasoning passthrough, `finish_reason` capture, streaming usage via `stream_options`, and extended timeout for reasoning models.
+- `providers/mistral.py` — Mistral AI SDK adapter supporting chat and Agents API (`agent_id`), multimodal inputs (images, documents, audio, files), structured outputs (JSON schema), reasoning effort, guardrails, safe prompt, speculative decoding (prediction), and streaming.
+- `providers/xai.py` — xAI/Grok adapter via OpenAI Responses API compatibility with provider-specific built-in tools (`x_search`, `collections_search`, `attachment_search`), reasoning, live search parameters, inline citation extraction, cost tracking (`cost_in_usd_ticks`), and deferred completions.
+
+**Enhanced Existing Providers**
+- `providers/openai_responses.py` — Extended `_to_tools` for MCP `connector_id`/`authorization`/`defer_loading`; added `reasoning_summary` and `include` parameters; extract `cached_tokens` and `reasoning_tokens` from usage; stream `reasoning_summary_text` and `mcp_call`/`web_search_call` events; handle `response.failed`/`response.incomplete` as error events.
+- `providers/anthropic.py` — Added `thinking_signature` in assistant messages; `document` and `search_result` user content types; server-side tools support; `thinking_type` including "adaptive"; `thinking_display`, `cache_control`, `output_config`, `citations_config`; citations extraction; `stop_reason` and `container` metadata; detailed usage (cache creation/read, server tool use).
+- `providers/gemini.py` — Added multimodal user input (base64 images, file URIs); `url_context`, `google_maps`, `computer_use`, `file_search` built-in tools; native `McpServer` support; `built_in_tool_configs`; `thinking_level`; `tool_config`, `safety_settings`, `response_schema`, `response_mime_type`; grounding metadata; `thoughts_token_count` and `cached_content_token_count` in usage.
+
+**Core Types**
+- `core/types.py` — Added `metadata` and `error` fields to `StreamEvent`; changed `NormalizedResponse.usage` from `Dict[str, int]` to `Dict[str, Any]` to support structured usage details (reasoning tokens, cached tokens, timing info, tool execution metadata).
+
+**Configuration**
+- `config/settings.py` — Added `GROQ_API_KEY`, `DEEPSEEK_API_KEY`, `DEEPSEEK_BASE_URL`, `DEFAULT_DEEPSEEK_MODEL`, `MISTRAL_API_KEY`, `MISTRAL_BASE_URL`, `DEFAULT_MISTRAL_MODEL`, `XAI_API_KEY`, `XAI_BASE_URL`, `DEFAULT_XAI_MODEL` to `ProviderSettings`.
+- `runtime/router.py` — Registered `OpenAIResponsesProvider`, `GroqProvider`, `DeepSeekProvider`, `MistralProvider`, `XAIProvider` in provider factory; updated profile resolution for all new providers.
+
+**Dependencies**
+- `pyproject.toml` — Added `groq>=0.9`, `mistralai>=2.0` as dependencies; updated keywords.
+
+**Tests**
+- 200 pytest tests (up from 101), all passing, all offline.
+- `tests/test_openai_responses_provider.py` — Tests for MCP tool conversion, connector fields, built-in tool types.
+- `tests/test_groq_provider.py` — Tests for compound model detection, message conversion (including reasoning), tool definitions.
+- `tests/test_deepseek_provider.py` — Tests for `_normalize_thinking_param` (bool/dict/string/None), reasoning passthrough in messages.
+- `tests/test_mistral_provider.py` — Tests for message conversion, multimodal content parts, tool definitions, agent tool types.
+- `tests/test_xai_provider.py` — Tests for input item conversion, tool definitions (including x_search), built-in tool types.
+- `tests/test_gemini_provider.py` — Tests for built-in tools (url_context, google_maps, file_search, computer_use, mcp_servers).
+- Updated `tests/test_anthropic_provider.py` — Tests for document/search_result content, cache_control, server-side tools.
+- Updated `tests/test_router.py` — Tests for Mistral and xAI provider creation and profile resolution.
+
+---
+
 ## [0.1.0] — 2025-03-26
 
 Initial public release.
@@ -72,5 +113,6 @@ Initial public release.
 - `.env.example` — Fully documented environment variable reference.
 - `pyproject.toml` — Hatchling build, ruff config, pytest config.
 
-[Unreleased]: https://github.com/PhilipAD/Unified-Agent-Gateway/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/PhilipAD/Unified-Agent-Gateway/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/PhilipAD/Unified-Agent-Gateway/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/PhilipAD/Unified-Agent-Gateway/releases/tag/v0.1.0

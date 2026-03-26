@@ -5,7 +5,7 @@
 
 <p align="center">
   <strong>One API. Every LLM. Any tool.</strong><br>
-  Normalize OpenAI, Anthropic, Gemini — and any OpenAI-compatible endpoint — behind a single REST/SSE interface with MCP, RAG, and bring-your-own-key support.
+  Normalize OpenAI, Anthropic, Gemini, Groq, DeepSeek, Mistral, xAI/Grok — and any OpenAI-compatible endpoint — behind a single REST/SSE interface with MCP, RAG, and bring-your-own-key support.
 </p>
 
 <p align="center">
@@ -18,7 +18,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/python-≥3.10-blue?logo=python&logoColor=white" alt="Python">
   <img src="https://img.shields.io/badge/FastAPI-async-009688?logo=fastapi&logoColor=white" alt="FastAPI">
-  <img src="https://img.shields.io/badge/providers-OpenAI_%7C_Anthropic_%7C_Gemini_%7C_Groq_%7C_DeepSeek-blueviolet" alt="Providers">
+  <img src="https://img.shields.io/badge/providers-OpenAI_%7C_Anthropic_%7C_Gemini_%7C_Groq_%7C_DeepSeek_%7C_Mistral_%7C_xAI-blueviolet" alt="Providers">
   <img src="https://img.shields.io/badge/MCP-streamable__http_%7C_sse-orange" alt="MCP">
   <a href="https://github.com/astral-sh/ruff"><img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json" alt="Ruff"></a>
 </p>
@@ -88,8 +88,8 @@ curl http://localhost:8000/agent-query \
 
 ### 🔌 Provider Adapters
 OpenAI · Anthropic · Gemini<br>
-Groq · DeepSeek · Together<br>
-Ollama · Azure · any OAI endpoint
+Groq · DeepSeek · Mistral · xAI/Grok<br>
+Together · Ollama · Azure · any OAI endpoint
 
 </td>
 <td width="25%" align="center" style="vertical-align: top; padding: 12px;">
@@ -123,15 +123,24 @@ Same event shape, always.
 
 ## 🗺️ Feature Matrix
 
-| Feature | OpenAI-compatible | Anthropic | Gemini |
-|---------|:-----------------:|:---------:|:------:|
-| Sync chat | ✅ | ✅ | ✅ |
-| SSE streaming | ✅ | ✅ | ✅ |
-| Tool / function calling | ✅ | ✅ | ✅ |
-| Multi-hop tool loops | ✅ | ✅ | ✅ |
-| Context injection | ✅ | ✅ | ✅ |
-| MCP tool auto-discovery | ✅ | ✅ | ✅ |
-| Inline BYOK credentials | ✅ | ✅ | ✅ |
+| Feature | OpenAI | OpenAI Responses | Anthropic | Gemini | Groq | DeepSeek | Mistral | xAI/Grok |
+|---------|:------:|:----------------:|:---------:|:------:|:----:|:--------:|:-------:|:--------:|
+| Sync chat | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| SSE streaming | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Tool / function calling | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Multi-hop tool loops | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Context injection | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| MCP tool auto-discovery | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ |
+| Server-side built-in tools | — | ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ |
+| Extended thinking / reasoning | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Vision / multimodal input | — | ✅ | ✅ | ✅ | — | — | ✅ | ✅ |
+| Structured outputs (JSON schema) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Prompt caching | — | ✅ | ✅ | ✅ | — | ✅ | — | ✅ |
+| Citations | — | ✅ | ✅ | — | ✅ | — | — | ✅ |
+| Document / PDF input | — | — | ✅ | — | ✅ | — | ✅ | — |
+| Live web search | — | ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ |
+| Agents API | — | — | — | — | — | — | ✅ | — |
+| Inline BYOK credentials | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 ---
 
@@ -212,10 +221,11 @@ curl -s http://localhost:8000/agent-query \
         │  • HTTP tools  │  │  • ContextForge  │
         └────────────────┘  └─────────────────┘
                       │
-        ┌─────────────▼──────────────────────────┐
-        │        Provider Adapters               │
-        │  openai_compatible │ anthropic │ gemini │
-        └────────────────────────────────────────┘
+        ┌──────────────────────▼────────────────────────────────────┐
+        │                  Provider Adapters                       │
+        │  openai_compatible │ openai_responses │ anthropic        │
+        │  gemini │ groq │ deepseek │ mistral │ xai               │
+        └─────────────────────────────────────────────────────────┘
 ```
 
 ### Layer reference
@@ -224,7 +234,7 @@ curl -s http://localhost:8000/agent-query \
 |-------|---------|---------------|
 | Config | `config/` | Pydantic-settings: env-loaded profiles, MCP presets, context presets |
 | Core types | `core/` | Normalized messages, tool calls, responses, stream events |
-| Providers | `providers/` | Translate normalized ↔ provider-native; streaming |
+| Providers | `providers/` | 8 adapters: translate normalized types to/from each provider's native API |
 | Tools | `tools/` | Registry, MCP loader, inline MCP HTTP client |
 | Context | `context/` | Registry, ContextForge adapter, RAG/KV fetch |
 | Runtime | `runtime/` | Router, profile resolution, bootstrap, SSE helpers |
@@ -244,9 +254,13 @@ All settings are env vars (`.env` file supported). Full reference in [`.env.exam
 OPENAI_API_KEY=sk-...
 ANTHROPIC_API_KEY=sk-ant-...
 GOOGLE_API_KEY=AI...
+GROQ_API_KEY=gsk-...
+DEEPSEEK_API_KEY=sk-ds-...
+MISTRAL_API_KEY=...
+XAI_API_KEY=xai-...
 
-# Extra OpenAI-compatible providers (Groq, DeepSeek, Together, Ollama…)
-OPENAI_COMPATIBLE_PROVIDERS={"groq":{"api_key":"gsk-...","base_url":"https://api.groq.com/openai/v1","model":"llama-3.3-70b-versatile"}}
+# Extra OpenAI-compatible providers (Together, Ollama, Azure…)
+OPENAI_COMPATIBLE_PROVIDERS={"together":{"api_key":"...","base_url":"https://api.together.xyz/v1","model":"meta-llama/Llama-3.3-70B-Instruct-Turbo"}}
 ```
 
 </details>
@@ -259,10 +273,15 @@ Select provider + model + presets per request with a single `"profile"` field.
 ```env
 AGENT_PROFILES={
   "default":    {"provider_name": "openai_compatible"},
+  "openai-r":   {"provider_name": "openai_responses", "model": "gpt-4o"},
   "claude":     {"provider_name": "anthropic", "model": "claude-opus-4-5"},
-  "fast":       {"provider_name": "groq"},
+  "gemini":     {"provider_name": "gemini", "model": "gemini-2.5-pro"},
+  "fast":       {"provider_name": "groq", "model": "llama-3.3-70b-versatile"},
+  "deep":       {"provider_name": "deepseek", "model": "deepseek-reasoner"},
+  "mistral":    {"provider_name": "mistral", "model": "mistral-large-latest"},
+  "grok":       {"provider_name": "xai", "model": "grok-4.20-reasoning"},
   "researcher": {
-    "provider_name": "openai_compatible",
+    "provider_name": "openai_responses",
     "mcp_namespaces": ["search"],
     "context_names":  ["company_info"]
   }
@@ -532,7 +551,7 @@ pytest --cov=. --cov-report=term-missing
 pytest -m "not integration"
 ```
 
-101 tests, all passing, all offline.
+200 tests, all passing, all offline.
 
 ---
 
@@ -546,9 +565,9 @@ unified-agent-gateway/
 ├── core/              Normalized types, agent loop, durable execution primitives
 ├── docs/              Architecture reference and API specification
 ├── postman/           Postman collection (52 requests, 10 folders)
-├── providers/         OpenAI-compatible, Anthropic, Gemini adapters
+├── providers/         OpenAI, OpenAI Responses, Anthropic, Gemini, Groq, DeepSeek, Mistral, xAI adapters
 ├── runtime/           Router, profile resolution, bootstrap, SSE helpers
-├── tests/             pytest test suite (101 tests, all offline)
+├── tests/             pytest test suite (200 tests, all offline)
 ├── tools/             Tool registry, MCP loader, inline MCP HTTP client
 ├── .env.example       Fully documented environment variable reference
 ├── main.py            Application entry point
@@ -562,10 +581,11 @@ unified-agent-gateway/
 | Version | What | Status |
 |---------|------|--------|
 | **v0.1.0** | Core gateway: 3 providers, tool loop, SSE, MCP, named presets, BYOK, 101 tests | ✅ Shipped |
-| **v0.2** | Auth middleware, rate limiting, request logging | 🔜 Planned |
-| **v0.3** | Agent handoffs — native multi-agent delegation via `call_agent` meta-tool | 🔜 Planned |
-| **v0.4** | Durable execution — resume interrupted runs, persistent step records | 💡 Exploring |
-| **v0.5** | Provider marketplace — plug-in registry for community adapters | 💡 Exploring |
+| **v0.2.0** | Full provider coverage: 8 dedicated adapters (OpenAI, OpenAI Responses, Anthropic, Gemini, Groq, DeepSeek, Mistral, xAI/Grok), extended thinking/reasoning, server-side tools, multimodal I/O, citations, 200 tests | ✅ Shipped |
+| **v0.3** | Auth middleware, rate limiting, request logging | 🔜 Planned |
+| **v0.4** | Agent handoffs — native multi-agent delegation via `call_agent` meta-tool | 🔜 Planned |
+| **v0.5** | Durable execution — resume interrupted runs, persistent step records | 💡 Exploring |
+| **v0.6** | Provider marketplace — plug-in registry for community adapters | 💡 Exploring |
 | **v1.0** | Production-grade — auth, permissions, audit logs, HA deployment guide | 💡 Exploring |
 
 ---
@@ -575,7 +595,7 @@ unified-agent-gateway/
 Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for dev setup, standards, and the PR process.
 
 Ideas especially wanted:
-- 🔌 **New provider adapters** — Mistral, Cohere, Bedrock, Azure OpenAI
+- 🔌 **New provider adapters** — Cohere, Bedrock, Azure OpenAI
 - 🛠️ **New tool sources** — gRPC, GraphQL, database queries
 - 💉 **New context sources** — vector stores, custom KV, document stores
 - 📖 **Documentation** — tutorials, examples, integration guides

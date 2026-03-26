@@ -6,8 +6,13 @@ from config.settings import (
     ProviderSettings,
 )
 from providers.anthropic import AnthropicProvider
+from providers.deepseek import DeepSeekProvider
 from providers.gemini import GeminiProvider
+from providers.groq import GroqProvider
+from providers.mistral import MistralProvider
 from providers.openai_compatible import OpenAICompatibleProvider
+from providers.openai_responses import OpenAIResponsesProvider
+from providers.xai import XAIProvider
 from runtime.router import (
     ProviderConfig,
     create_provider,
@@ -23,6 +28,12 @@ def test_create_provider_openai():
     assert isinstance(p, OpenAICompatibleProvider)
 
 
+def test_create_provider_openai_responses():
+    cfg = ProviderConfig(provider_name="openai_responses", api_key="k", model="m")
+    p = create_provider(cfg)
+    assert isinstance(p, OpenAIResponsesProvider)
+
+
 def test_create_provider_anthropic():
     cfg = ProviderConfig(provider_name="anthropic", api_key="k", model="m")
     p = create_provider(cfg)
@@ -33,6 +44,18 @@ def test_create_provider_gemini():
     cfg = ProviderConfig(provider_name="gemini", api_key="k", model="m")
     p = create_provider(cfg)
     assert isinstance(p, GeminiProvider)
+
+
+def test_create_provider_groq():
+    cfg = ProviderConfig(provider_name="groq", api_key="k", model="m")
+    p = create_provider(cfg)
+    assert isinstance(p, GroqProvider)
+
+
+def test_create_provider_deepseek():
+    cfg = ProviderConfig(provider_name="deepseek", api_key="k", model="m")
+    p = create_provider(cfg)
+    assert isinstance(p, DeepSeekProvider)
 
 
 def test_create_provider_unknown():
@@ -147,3 +170,70 @@ def test_resolve_agent_profile_mcp_namespaces():
     profile = resolve_agent_profile(gs, profile="researcher")
     assert profile.mcp_namespaces == ["search", "files"]
     assert profile.context_names == ["company_info"]
+
+
+def test_resolve_groq_profile():
+    ps = ProviderSettings(GROQ_API_KEY="gsk-test")
+    gs = GatewaySettings(
+        AGENT_PROFILES={"default": {"provider_name": "groq"}},
+    )
+    cfg = resolve_provider_config(ps, gs)
+    assert cfg.provider_name == "groq"
+    assert cfg.api_key == "gsk-test"
+    assert cfg.model == "llama-3.3-70b-versatile"
+
+
+def test_resolve_deepseek_profile():
+    ps = ProviderSettings(DEEPSEEK_API_KEY="sk-ds-test")
+    gs = GatewaySettings(
+        AGENT_PROFILES={"default": {"provider_name": "deepseek"}},
+    )
+    cfg = resolve_provider_config(ps, gs)
+    assert cfg.provider_name == "deepseek"
+    assert cfg.api_key == "sk-ds-test"
+    assert cfg.model == "deepseek-chat"
+
+
+def test_resolve_openai_responses_profile():
+    ps = ProviderSettings(OPENAI_API_KEY="sk-oai")
+    gs = GatewaySettings(
+        AGENT_PROFILES={"default": {"provider_name": "openai_responses"}},
+    )
+    cfg = resolve_provider_config(ps, gs)
+    assert cfg.provider_name == "openai_responses"
+    assert cfg.api_key == "sk-oai"
+    assert cfg.model == "gpt-4o"
+
+
+def test_create_provider_mistral():
+    cfg = ProviderConfig(provider_name="mistral", api_key="k", model="m")
+    p = create_provider(cfg)
+    assert isinstance(p, MistralProvider)
+
+
+def test_create_provider_xai():
+    cfg = ProviderConfig(provider_name="xai", api_key="k", model="m")
+    p = create_provider(cfg)
+    assert isinstance(p, XAIProvider)
+
+
+def test_resolve_mistral_profile():
+    ps = ProviderSettings(MISTRAL_API_KEY="mis-test")
+    gs = GatewaySettings(
+        AGENT_PROFILES={"default": {"provider_name": "mistral"}},
+    )
+    cfg = resolve_provider_config(ps, gs)
+    assert cfg.provider_name == "mistral"
+    assert cfg.api_key == "mis-test"
+    assert cfg.model == "mistral-large-latest"
+
+
+def test_resolve_xai_profile():
+    ps = ProviderSettings(XAI_API_KEY="xai-test")
+    gs = GatewaySettings(
+        AGENT_PROFILES={"default": {"provider_name": "xai"}},
+    )
+    cfg = resolve_provider_config(ps, gs)
+    assert cfg.provider_name == "xai"
+    assert cfg.api_key == "xai-test"
+    assert cfg.model == "grok-4-1-fast-reasoning"

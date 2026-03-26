@@ -130,6 +130,22 @@ class ProviderSettings(BaseSettings):
     GOOGLE_API_KEY: Optional[str] = None
     DEFAULT_GEMINI_MODEL: str = "gemini-2.5-flash"
 
+    GROQ_API_KEY: Optional[str] = None
+    GROQ_BASE_URL: Optional[str] = None
+    DEFAULT_GROQ_MODEL: str = "llama-3.3-70b-versatile"
+
+    DEEPSEEK_API_KEY: Optional[str] = None
+    DEEPSEEK_BASE_URL: Optional[str] = None
+    DEFAULT_DEEPSEEK_MODEL: str = "deepseek-chat"
+
+    MISTRAL_API_KEY: Optional[str] = None
+    MISTRAL_BASE_URL: Optional[str] = None
+    DEFAULT_MISTRAL_MODEL: str = "mistral-large-latest"
+
+    XAI_API_KEY: Optional[str] = None
+    XAI_BASE_URL: Optional[str] = None
+    DEFAULT_XAI_MODEL: str = "grok-4-1-fast-reasoning"
+
     model_config = _ENV_CFG
 
 

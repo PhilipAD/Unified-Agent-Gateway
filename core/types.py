@@ -26,6 +26,7 @@ class NormalizedMessage:
     tool_calls: List[ToolCall] = field(default_factory=list)
     tool_call_id: Optional[str] = None
     name: Optional[str] = None
+    thinking_content: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         d: Dict[str, Any] = {"role": self.role.value, "content": self.content}
@@ -37,6 +38,8 @@ class NormalizedMessage:
             d["tool_call_id"] = self.tool_call_id
         if self.name is not None:
             d["name"] = self.name
+        if self.thinking_content is not None:
+            d["thinking_content"] = self.thinking_content
         return d
 
 
@@ -64,11 +67,13 @@ class ToolResult:
 class StreamEvent:
     """Normalized streaming event emitted by providers."""
 
-    type: str  # "chunk", "tool_call", "usage", "done"
+    type: str  # "chunk", "tool_call", "usage", "metadata", "error", "done"
     delta: Optional[str] = None
     tool_call: Optional[ToolCall] = None
-    usage: Optional[Dict[str, int]] = None
+    usage: Optional[Dict[str, Any]] = None
     response: Optional[NormalizedResponse] = None
+    metadata: Optional[Dict[str, Any]] = None
+    error: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         d: Dict[str, Any] = {"type": self.type}
@@ -82,6 +87,10 @@ class StreamEvent:
             }
         if self.usage is not None:
             d["usage"] = self.usage
+        if self.metadata is not None:
+            d["metadata"] = self.metadata
+        if self.error is not None:
+            d["error"] = self.error
         return d
 
 
@@ -89,7 +98,7 @@ class StreamEvent:
 class NormalizedResponse:
     messages: List[NormalizedMessage] = field(default_factory=list)
     conversation: List[NormalizedMessage] = field(default_factory=list)
-    usage: Dict[str, int] = field(default_factory=dict)
+    usage: Dict[str, Any] = field(default_factory=dict)
     provider: Optional[str] = None
     model: Optional[str] = None
     raw: Any = None

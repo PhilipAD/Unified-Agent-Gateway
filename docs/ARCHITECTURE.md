@@ -6,7 +6,7 @@ A **product-agnostic** agent runtime that normalizes communication with
 multiple LLM providers behind one interface.  Any backend service can embed
 this gateway to get:
 
-* Consistent tool calling across OpenAI, Anthropic, and Gemini.
+* Consistent tool calling across OpenAI, Anthropic, Gemini, Groq, DeepSeek, Mistral, and xAI/Grok.
 * A single agent loop that owns retries, tool hops, and tracing.
 * Pluggable context injection (ContextForge, RAG, static, etc.).
 * MCP tool auto-discovery and namespaced registration.
@@ -20,10 +20,15 @@ core/
   agent_loop.py     Provider-agnostic tool-calling loop
 
 providers/
-  base.py           BaseProvider ABC (run + stream)
-  openai_compatible.py   OpenAI / DeepSeek / Groq / Mistral / Ollama
-  anthropic.py      Claude via Anthropic SDK
-  gemini.py         Gemini via google-genai SDK
+  base.py               BaseProvider ABC (run + stream)
+  openai_compatible.py   Generic OpenAI-compatible adapter (Together, Ollama, Azure, etc.)
+  openai_responses.py    OpenAI Responses API (built-in tools, MCP, reasoning, stateful)
+  anthropic.py           Claude via Anthropic SDK (thinking, server tools, citations)
+  gemini.py              Gemini via google-genai SDK (built-in tools, native MCP, thinking)
+  groq.py                Groq API (compound models, built-in search/code tools, reasoning)
+  deepseek.py            DeepSeek API (reasoning content, thinking, multi-turn passthrough)
+  mistral.py             Mistral AI SDK (chat + agents API, multimodal, guardrails)
+  xai.py                 xAI/Grok via OpenAI Responses compat (x_search, citations, cost)
 
 tools/
   registry.py       ToolRegistry with ToolSource enum
@@ -57,8 +62,8 @@ All providers map to and from:
 * `NormalizedMessage` -- role, content, optional tool_calls, tool_call_id
 * `ToolCall` -- id, name, arguments (parsed dict)
 * `ToolDefinition` -- name, description, JSON Schema
-* `NormalizedResponse` -- messages, conversation transcript, usage, raw
-* `StreamEvent` -- type (chunk/tool_call/usage/done), delta, tool_call
+* `NormalizedResponse` -- messages, conversation transcript, usage (Dict[str, Any]), raw
+* `StreamEvent` -- type (chunk/tool_call/usage/metadata/error/done), delta, tool_call, metadata
 
 ### Provider Adapters
 
@@ -109,9 +114,12 @@ The HTTP API can connect per-request via:
 in settings.  Consuming products define their own routing rules through
 environment or configuration without touching gateway code.
 
-Named `OPENAI_COMPATIBLE_PROVIDERS` entries (Groq, DeepSeek, Together, …)
-are referenced by `provider_name` in a profile and resolve to the
-`openai_compatible` adapter with preset `base_url` / `model` / `api_key`.
+Dedicated providers (Groq, DeepSeek, Mistral, xAI) each have their own
+adapter that surfaces provider-specific capabilities (reasoning, built-in
+tools, citations, etc.).  Generic OpenAI-compatible providers (Together,
+Ollama, Azure) are referenced via `OPENAI_COMPATIBLE_PROVIDERS` entries
+and resolve to the `openai_compatible` adapter with preset `base_url` /
+`model` / `api_key`.
 
 `AgentProfile` may attach `mcp_namespaces` and `context_names` so every
 request using that profile automatically includes those presets without
