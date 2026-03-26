@@ -30,7 +30,7 @@ This project follows the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.
 
 - **Bug reports** — use the [bug report template](.github/ISSUE_TEMPLATE/bug_report.md)
 - **Feature requests** — use the [feature request template](.github/ISSUE_TEMPLATE/feature_request.md)
-- **New provider adapters** — Mistral, Cohere, Bedrock, Azure OpenAI, …
+- **New provider adapters** — Cohere, Bedrock, Azure OpenAI, …
 - **New tool sources** — gRPC, GraphQL, database queries, …
 - **New context sources** — vector stores, custom KV, document stores, …
 - **Documentation** — improve README, API spec, architecture doc
@@ -53,12 +53,15 @@ source .venv/bin/activate        # Windows: .venv\Scripts\activate
 # 3. Install in editable mode with dev deps
 pip install -e ".[dev]"
 
-# 4. Copy env template
+# 4. Set up pre-commit hooks (auto-formats on every commit)
+pre-commit install
+
+# 5. Copy env template
 cp .env.example .env
 # Fill in at least one API key if you want integration tests
 
-# 5. Verify everything passes
-pytest
+# 6. Verify everything passes
+make test
 ```
 
 Python **3.10+** is required. We test on 3.10, 3.11, and 3.12.
@@ -89,20 +92,26 @@ Integration tests (marked `@pytest.mark.integration`) hit live APIs and require 
 
 ## Linting and Formatting
 
-We use [ruff](https://docs.astral.sh/ruff/) for both linting and import sorting.
+We use [ruff](https://docs.astral.sh/ruff/) for both linting and formatting. Pre-commit hooks run
+automatically on every commit if you ran `pre-commit install` during setup.
 
 ```bash
-# Check
+# Check (same checks CI runs)
+make lint
+
+# Auto-fix and format
+make format
+```
+
+Or manually:
+
+```bash
 ruff check .
-
-# Fix auto-fixable issues
 ruff check --fix .
-
-# Format (ruff format is the formatter, not black)
 ruff format .
 ```
 
-CI will fail on ruff errors. Run both commands before opening a PR.
+CI will fail on ruff errors. Run `make lint` before opening a PR.
 
 ---
 
@@ -228,7 +237,7 @@ registry.register(RegisteredContext(
 1. **Open an issue first** for any significant change (new provider, architectural change, breaking API change).
 2. Fork the repo and create a branch: `git checkout -b feat/my-feature`.
 3. Make your changes, add tests, update docs.
-4. Run `ruff check . && pytest` — both must pass.
+4. Run `make lint && make test` — both must pass.
 5. Push and open a PR against `main`.
 6. Fill in the PR template — describe what, why, and how to test.
 7. A maintainer will review; address feedback with new commits (no force-push until approved).

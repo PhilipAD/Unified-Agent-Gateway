@@ -15,9 +15,22 @@ _Changes that are merged to `main` but not yet released._
 
 ## [0.2.0] — 2026-03-26
 
-Full provider coverage: 8 dedicated adapters with deep integration of each provider's agent capabilities.
+Full provider coverage, pip-installable package with `uag` CLI, and OSS hardening.
 
 ### Added
+
+**Package and CLI**
+- `pyproject.toml` — Bumped to v0.2.0; added `typer`, `rich` to dependencies; added `[project.scripts]` entry `uag = "cli:app"` for CLI access after `pip install`; added `pytest-cov`, `coverage`, `pre-commit` to dev deps; added `force-include` for `cli.py` and `py.typed` in wheel.
+- `cli.py` — Typer-based CLI with three commands: `uag serve` (start HTTP gateway with host/port/reload/workers options), `uag chat` (in-process query with `--profile`, `--stream`, `--json`, `--system` flags), `uag providers` (list registered providers with config status table).
+- `py.typed` — PEP 561 typed package marker.
+- `Makefile` — Dev task runner with `install`, `test`, `test-cov`, `lint`, `format`, `serve`, `clean`, `build` targets.
+
+**CI/CD and OSS**
+- `.github/workflows/publish.yml` — PyPI publish workflow using OIDC trusted publishing, triggered on `v*.*.*` tags.
+- `.github/workflows/ci.yml` — Added `pytest-cov` coverage reporting with Codecov upload.
+- `.github/dependabot.yml` — Weekly automated dependency updates for pip and GitHub Actions.
+- `.pre-commit-config.yaml` — Pre-commit hooks for ruff lint + format on every commit.
+- `CONTRIBUTING.md` — Added `pre-commit install` to setup steps; updated commands to use `make` targets.
 
 **New Providers**
 - `providers/openai_responses.py` — OpenAI Responses API adapter with built-in tools (web search, file search, code interpreter, computer use, image generation), remote MCP support, reasoning effort/summary, stateful sessions (`previous_response_id`), and detailed usage tracking (cached/reasoning tokens).

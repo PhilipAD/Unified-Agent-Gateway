@@ -9,6 +9,7 @@
 </p>
 
 <p align="center">
+  <a href="https://pypi.org/project/unified-agent-gateway/"><img src="https://img.shields.io/pypi/v/unified-agent-gateway?style=for-the-badge&logo=pypi&logoColor=white" alt="PyPI"></a>
   <a href="#-quick-start"><img src="https://img.shields.io/badge/Quick_Start-3_min-blue?style=for-the-badge" alt="Quick Start"></a>
   <a href="#-api-usage"><img src="https://img.shields.io/badge/API-REST_%2B_SSE-green?style=for-the-badge" alt="API"></a>
   <a href="postman/unified-agent-gateway.postman_collection.json"><img src="https://img.shields.io/badge/Postman-52_examples-orange?style=for-the-badge&logo=postman&logoColor=white" alt="Postman"></a>
@@ -146,16 +147,21 @@ Same event shape, always.
 
 ## 🚀 Quick Start
 
-### 1 — Install
+### Option A — pip install (recommended)
+
+```bash
+pip install unified-agent-gateway
+```
+
+### Option B — from source
 
 ```bash
 git clone https://github.com/PhilipAD/Unified-Agent-Gateway.git
 cd unified-agent-gateway
-python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 ```
 
-### 2 — Configure
+### Configure
 
 ```bash
 cp .env.example .env
@@ -163,16 +169,16 @@ cp .env.example .env
 #   OPENAI_API_KEY=sk-...
 ```
 
-### 3 — Run
+### Start the server
 
 ```bash
-python main.py
-# or: uvicorn main:app --reload
+uag serve
+# or: uag serve --reload --port 8000
 ```
 
 Server: `http://localhost:8000` · Swagger UI: `http://localhost:8000/docs`
 
-### 4 — First call
+### First call (HTTP)
 
 ```bash
 curl -s http://localhost:8000/agent-query \
@@ -190,6 +196,14 @@ curl -s http://localhost:8000/agent-query \
   "warnings": [],
   "errors": []
 }
+```
+
+### First call (CLI -- no server needed)
+
+```bash
+uag chat "What is the capital of France?"
+uag chat "Explain quantum computing" --profile claude --stream
+uag chat "2+2?" --json
 ```
 
 ---
@@ -538,17 +552,63 @@ registry.register(RegisteredContext(
 
 ---
 
+## 🖥️ CLI Reference
+
+After `pip install`, the `uag` command is available globally.
+
+```
+uag serve            Start the HTTP gateway
+uag chat "prompt"    Send a query directly (no server needed)
+uag providers        List registered providers and config status
+```
+
+<details>
+<summary><strong><code>uag serve</code></strong></summary>
+
+```bash
+uag serve                          # defaults: 0.0.0.0:8000
+uag serve --port 3000 --reload     # dev mode
+uag serve --workers 4              # production
+```
+
+</details>
+
+<details>
+<summary><strong><code>uag chat</code></strong></summary>
+
+```bash
+uag chat "What is 2+2?"                         # default profile
+uag chat "Explain ML" --profile claude           # specific provider
+uag chat "Write a poem" --stream                 # stream tokens live
+uag chat "Summarise this" --json                 # raw JSON output
+uag chat "Be brief" --system "You are terse."    # custom system prompt
+```
+
+</details>
+
+<details>
+<summary><strong><code>uag providers</code></strong></summary>
+
+```bash
+uag providers
+# Prints a table of all providers, their adapter class, env key, and whether configured
+```
+
+</details>
+
+---
+
 ## 🧪 Running Tests
 
 ```bash
 # Full suite — no live API keys needed
-pytest
+make test
 
 # With coverage
-pytest --cov=. --cov-report=term-missing
+make test-cov
 
-# Exclude integration tests
-pytest -m "not integration"
+# Or directly with pytest
+pytest -q -m "not integration"
 ```
 
 200 tests, all passing, all offline.
@@ -569,8 +629,11 @@ unified-agent-gateway/
 ├── runtime/           Router, profile resolution, bootstrap, SSE helpers
 ├── tests/             pytest test suite (200 tests, all offline)
 ├── tools/             Tool registry, MCP loader, inline MCP HTTP client
+├── cli.py             Typer CLI (uag serve / chat / providers)
+├── main.py            Application entry point (uvicorn)
+├── Makefile           Dev task runner (make test, make lint, make serve, ...)
 ├── .env.example       Fully documented environment variable reference
-├── main.py            Application entry point
+├── py.typed           PEP 561 typed package marker
 └── pyproject.toml     Package metadata, build config, ruff + pytest config
 ```
 
@@ -616,18 +679,24 @@ MIT — see [LICENSE](LICENSE).
 
 ---
 
-## 🚢 First-time publish (GitHub)
+## 🚢 Publishing
+
+### PyPI (automated)
+
+Tag a release and push — the GitHub Actions publish workflow handles the rest:
 
 ```bash
-# Option A — GitHub CLI
-gh repo create PhilipAD/Unified-Agent-Gateway --public --source=. --remote=origin --push
-
-# Option B — manual
-git remote add origin https://github.com/PhilipAD/Unified-Agent-Gateway.git
-git push -u origin main
+git tag v0.2.0
+git push origin v0.2.0
 ```
 
-Then enable **Actions** in the repo (Settings → Actions) so CI runs on every push.
+Requires OIDC trusted publishing configured in your PyPI project settings.
+
+### GitHub repo (first time)
+
+```bash
+gh repo create PhilipAD/Unified-Agent-Gateway --public --source=. --remote=origin --push
+```
 
 ---
 
