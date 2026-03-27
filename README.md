@@ -228,6 +228,38 @@ Every **—** is a genuine gap in **this SDK** or a real vendor limitation.
 
 ---
 
+## 📦 Dependencies
+
+All constraints are declared in [`pyproject.toml`](pyproject.toml). Upper bounds prevent silent breakage from future major-version API changes.
+
+### Provider SDKs
+
+| Provider | Package | Tested version | Min required | Adapter |
+|----------|---------|---------------|-------------|---------|
+| OpenAI / OAI-compat | [`openai`](https://pypi.org/project/openai/) | **2.30.0** | `>=2.0,<3` | `openai_compatible`, `openai_responses`, `xai` |
+| Anthropic | [`anthropic`](https://pypi.org/project/anthropic/) | **0.86.0** | `>=0.86,<1` | `anthropic` |
+| Google Gemini | [`google-genai`](https://pypi.org/project/google-genai/) | **1.47.0** | `>=1.47,<2` | `gemini` |
+| Groq | [`groq`](https://pypi.org/project/groq/) | **1.0.0** | `>=1.0,<2` | `groq` |
+| Mistral | [`mistralai`](https://pypi.org/project/mistralai/) | **1.10.0** | `>=1.10,<2` | `mistral` |
+| MCP | [`mcp`](https://pypi.org/project/mcp/) | **1.26.0** | `>=1.26,<2` | All (tool auto-discovery) |
+
+> **Note:** `openai>=2.0` is required — the Responses API (`client.responses.create`) only exists in the v2 SDK. The `xai` adapter uses the same SDK pointed at `https://api.x.ai/v1`.
+
+### Framework & transport
+
+| Package | Tested version | Constraint | Purpose |
+|---------|---------------|-----------|---------|
+| [`fastapi`](https://pypi.org/project/fastapi/) | 0.135.2 | `>=0.115,<1` | HTTP / SSE server |
+| [`uvicorn[standard]`](https://pypi.org/project/uvicorn/) | 0.42.0 | `>=0.30,<1` | ASGI server |
+| [`httpx`](https://pypi.org/project/httpx/) | 0.28.1 | `>=0.27,<1` | Async HTTP (OAI-compat, DeepSeek) |
+| [`pydantic`](https://pypi.org/project/pydantic/) | 2.12.5 | `>=2.0,<3` | Data models & validation |
+| [`pydantic-settings`](https://pypi.org/project/pydantic-settings/) | 2.13.1 | `>=2.0,<3` | Env-based config |
+| [`anyio`](https://pypi.org/project/anyio/) | 4.13.0 | `>=4.0,<5` | Async primitives |
+| [`typer`](https://pypi.org/project/typer/) | 0.24.1 | `>=0.12,<1` | CLI (`uag serve`) |
+| [`rich`](https://pypi.org/project/rich/) | 14.3.3 | `>=13.0,<15` | CLI output formatting |
+
+---
+
 ## 🚀 Quick Start
 
 ### Option A — pip install (recommended)
