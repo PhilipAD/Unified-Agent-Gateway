@@ -104,15 +104,67 @@ class DynamicMCPServer(BaseModel):
 
 
 class DynamicContext(BaseModel):
+    """Per-request context source specification.
+
+    Modes
+    -----
+    static       : inline text (optionally with ``{variable}`` placeholders).
+    http         : fetch text from an HTTP endpoint at call time.
+    md_hierarchy : walk *cwd* + ancestor dirs (optionally system/user dirs too)
+                   looking for files whose name matches any entry in *filenames*.
+                   Mirrors what the harness bootstraps globally, but fully
+                   configurable per request.
+    md_files     : read an explicit list of *paths* (absolute or relative to cwd).
+    md_glob      : collect every file matching *glob_pattern* under each directory
+                   listed in *glob_dirs*.
+    """
+
     name: str
     source: ContextSource = ContextSource.STATIC
-    mode: Literal["static", "http"] = "static"
+    mode: Literal["static", "http", "md_hierarchy", "md_files", "md_glob"] = "static"
+
+    # --- static / http shared ---
     text: str = ""
     url: Optional[str] = None
     method: Literal["GET", "POST"] = "POST"
     headers: Dict[str, str] = Field(default_factory=dict)
     payload_template: Dict[str, Any] = Field(default_factory=dict)
     timeout_seconds: float = 10.0
+
+    # --- md_hierarchy ---
+    filenames: List[str] = Field(
+        default_factory=list,
+        description="File names to search for (e.g. ['AGENTS.md', 'MY_RULES.md'])",
+    )
+    cwd: str = Field(".", description="Base directory for hierarchy walk")
+    system_dirs: List[str] = Field(
+        default_factory=list,
+        description="Extra system-level directories to scan before cwd walk",
+    )
+    user_dirs: List[str] = Field(
+        default_factory=list,
+        description="Extra user-level directories to scan (e.g. ['~/.myagent'])",
+    )
+    stop_at_git_root: bool = True
+    resolve_imports: bool = Field(
+        True,
+        description="Inline @file.md import directives (Gemini-style)",
+    )
+
+    # --- md_files ---
+    paths: List[str] = Field(
+        default_factory=list,
+        description="Explicit file paths to read (absolute or relative to cwd)",
+    )
+
+    # --- md_glob ---
+    glob_dirs: List[str] = Field(
+        default_factory=list,
+        description="Directories to scan with glob_pattern",
+    )
+    glob_pattern: str = Field("*.md", description="Glob pattern applied inside each glob_dir")
+
+    # --- shared ---
     required: bool = False
     max_chars: Optional[int] = None
 
@@ -398,7 +450,8 @@ async def _compose_registries(
 
             async def fetch(_spec: DynamicContext = spec, **kwargs: Any) -> str:
                 return _safe_format(_spec.text, {k: str(v) for k, v in kwargs.items()})
-        else:
+
+        elif spec.mode == "http":
             if not spec.url:
                 warnings.append(f"Context '{ctx_name}' skipped: mode=http but no url provided")
                 continue
@@ -422,6 +475,83 @@ async def _compose_registries(
                         data = resp.json()
                         return str(data.get("context", data))
                     return resp.text
+
+        elif spec.mode == "md_hierarchy":
+            if not spec.filenames:
+                warnings.append(
+                    f"Context '{ctx_name}' skipped: mode=md_hierarchy requires filenames list"
+                )
+                continue
+
+            async def fetch(_spec: DynamicContext = spec, **kwargs: Any) -> str:
+                from context.md_hierarchy import collect_md_hierarchy
+
+                cwd = str(kwargs.get("cwd") or _spec.cwd or ".")
+                return collect_md_hierarchy(
+                    cwd=cwd,
+                    filenames=_spec.filenames,
+                    system_dirs=_spec.system_dirs,
+                    user_dirs=_spec.user_dirs,
+                    stop_at_git_root=_spec.stop_at_git_root,
+                    resolve_imports=_spec.resolve_imports,
+                )
+
+        elif spec.mode == "md_files":
+            if not spec.paths:
+                warnings.append(
+                    f"Context '{ctx_name}' skipped: mode=md_files requires paths list"
+                )
+                continue
+
+            async def fetch(_spec: DynamicContext = spec, **kwargs: Any) -> str:
+                import os
+                from pathlib import Path
+
+                from context.md_hierarchy import _read_file_safe  # noqa: PLC2701
+
+                base = Path(str(kwargs.get("cwd") or _spec.cwd or ".")).resolve()
+                parts: List[str] = []
+                for raw_path in _spec.paths:
+                    p = Path(os.path.expandvars(os.path.expanduser(raw_path)))
+                    if not p.is_absolute():
+                        p = base / p
+                    p = p.resolve()
+                    text = _read_file_safe(p)
+                    if text is not None:
+                        parts.append(f"--- file: {p} ---\n{text.rstrip()}")
+                    else:
+                        logger.warning("md_files context '%s': cannot read %s", _spec.name, p)
+                return "\n\n".join(parts)
+
+        elif spec.mode == "md_glob":
+            if not spec.glob_dirs:
+                warnings.append(
+                    f"Context '{ctx_name}' skipped: mode=md_glob requires glob_dirs list"
+                )
+                continue
+
+            async def fetch(_spec: DynamicContext = spec, **kwargs: Any) -> str:
+                import os
+                from pathlib import Path
+
+                from context.md_hierarchy import collect_glob_files_in_dirs
+
+                base = Path(str(kwargs.get("cwd") or _spec.cwd or ".")).resolve()
+                dirs = [
+                    Path(os.path.expandvars(os.path.expanduser(d)))
+                    if Path(os.path.expanduser(d)).is_absolute()
+                    else base / d
+                    for d in _spec.glob_dirs
+                ]
+                return collect_glob_files_in_dirs(
+                    dirs,
+                    _spec.glob_pattern,
+                    resolve_imports=_spec.resolve_imports,
+                )
+
+        else:
+            warnings.append(f"Context '{ctx_name}' skipped: unknown mode '{spec.mode}'")
+            continue
 
         contexts.register(
             RegisteredContext(

@@ -146,20 +146,47 @@ def load_gemini_md_text(
 
 
 async def fetch_gemini_md(**kwargs: Any) -> str:
+    """ContextRegistry fetch.
+
+    Respects per-request kwargs (passed via ``body.context``):
+      ``cwd`` / ``gemini_cwd``          — working directory
+      ``gemini_filenames``              — override filenames list entirely
+      ``gemini_extra_filenames``        — prepend extra names to default list
+      ``gemini_system_config_dir``      — override system config dir
+      ``gemini_strip_auto_memory``      — bool, strip Gemini Added Memories section
+    """
     from config.settings import AgentHarnessSettings
 
     h = AgentHarnessSettings()
     cwd = str(kwargs.get("cwd") or kwargs.get("gemini_cwd") or h.GEMINI_CLI_MD_CWD)
-    names = list(h.GEMINI_CLI_MD_FILENAMES)
-    extra = gemini_context_filenames_from_settings(cwd)
-    if extra:
-        names = extra + [n for n in names if n not in extra]
+
+    # Per-request filename override
+    if kwargs.get("gemini_filenames"):
+        names = list(kwargs["gemini_filenames"])
+    else:
+        names = list(h.GEMINI_CLI_MD_FILENAMES)
+        # workspace settings.json customisation (Gemini CLI behaviour)
+        ws_extra = gemini_context_filenames_from_settings(cwd)
+        if ws_extra:
+            names = ws_extra + [n for n in names if n not in ws_extra]
+        # caller-supplied prepend
+        extra = kwargs.get("gemini_extra_filenames") or []
+        if extra:
+            names = list(extra) + [n for n in names if n not in extra]
+
+    system_dir = (
+        kwargs.get("gemini_system_config_dir")
+        or h.GEMINI_CLI_SYSTEM_CONFIG_DIR
+    )
+    strip = bool(kwargs.get("gemini_strip_auto_memory", h.GEMINI_CLI_MD_STRIP_AUTO_MEMORY))
+
     text = load_gemini_md_text(
         cwd,
         names,
-        system_config_dir=h.GEMINI_CLI_SYSTEM_CONFIG_DIR,
-        strip_auto_memory=h.GEMINI_CLI_MD_STRIP_AUTO_MEMORY,
+        system_config_dir=system_dir,
+        strip_auto_memory=strip,
     )
-    if h.GEMINI_CLI_MD_MAX_CHARS and len(text) > h.GEMINI_CLI_MD_MAX_CHARS:
-        text = text[: h.GEMINI_CLI_MD_MAX_CHARS] + "\n[truncated]"
+    max_chars = h.GEMINI_CLI_MD_MAX_CHARS
+    if max_chars and len(text) > max_chars:
+        text = text[:max_chars] + "\n[truncated]"
     return text

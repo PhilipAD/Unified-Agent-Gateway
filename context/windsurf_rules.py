@@ -114,8 +114,29 @@ def load_windsurf_rules(workspace_dir: str = ".") -> str:
 
 
 async def fetch_windsurf_rules(**kwargs: Any) -> str:
+    """ContextRegistry fetch.
+
+    Respects per-request kwargs:
+      ``cwd`` / ``workspace_dir``          — workspace directory
+      ``windsurf_extra_rule_dirs``         — extra directories of ``*.md`` rule files
+      ``windsurf_agents_md_filenames``     — override AGENTS.md filenames searched
+    """
     from config.settings import AgentHarnessSettings
 
     h = AgentHarnessSettings()
     cwd = str(kwargs.get("cwd") or kwargs.get("workspace_dir") or h.WINDSURF_RULES_WORKSPACE_DIR)
-    return load_windsurf_rules(cwd)
+    text = load_windsurf_rules(cwd)
+
+    extra_dirs = kwargs.get("windsurf_extra_rule_dirs") or []
+    if extra_dirs:
+        from pathlib import Path
+
+        from context.md_hierarchy import collect_glob_files_in_dirs
+
+        extra_blob = collect_glob_files_in_dirs(
+            [Path(d).expanduser().resolve() for d in extra_dirs], "*.md"
+        )
+        if extra_blob.strip():
+            text = (text + "\n\n## Extra windsurf rules\n" + extra_blob).strip()
+
+    return text

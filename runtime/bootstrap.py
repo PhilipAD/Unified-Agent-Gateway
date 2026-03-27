@@ -156,6 +156,53 @@ async def bootstrap(
     # -- Agent harness context sources + MCP preset merge --------------------
     harness = AgentHarnessSettings()
 
+    if harness.CUSTOM_MD_ENABLED:
+        if not harness.CUSTOM_MD_FILENAMES:
+            logger.warning(
+                "CUSTOM_MD_ENABLED=true but CUSTOM_MD_FILENAMES is empty; skipping custom_md"
+            )
+        else:
+            from context.md_hierarchy import collect_md_hierarchy
+
+            _custom_filenames = list(harness.CUSTOM_MD_FILENAMES)
+            _custom_system_dirs = list(harness.CUSTOM_MD_SYSTEM_DIRS)
+            _custom_user_dirs = list(harness.CUSTOM_MD_USER_DIRS)
+            _custom_cwd = harness.CUSTOM_MD_CWD
+            _custom_stop = harness.CUSTOM_MD_STOP_AT_GIT_ROOT
+            _custom_imports = harness.CUSTOM_MD_RESOLVE_IMPORTS
+
+            async def _fetch_custom_md(**kwargs: Any) -> str:
+                cwd = str(kwargs.get("cwd") or kwargs.get("custom_md_cwd") or _custom_cwd)
+                # per-request overrides
+                filenames = kwargs.get("custom_md_filenames") or _custom_filenames
+                system_dirs = kwargs.get("custom_md_system_dirs") or _custom_system_dirs
+                user_dirs = kwargs.get("custom_md_user_dirs") or _custom_user_dirs
+                return collect_md_hierarchy(
+                    cwd,
+                    filenames,
+                    system_dirs=system_dirs,
+                    user_dirs=user_dirs,
+                    stop_at_git_root=_custom_stop,
+                    resolve_imports=_custom_imports,
+                )
+
+            contexts.register(
+                RegisteredContext(
+                    name="custom_md",
+                    source=ContextSource.STATIC,
+                    fetch=_fetch_custom_md,
+                    required=False,
+                    max_chars=harness.CUSTOM_MD_MAX_CHARS,
+                    metadata={
+                        "harness": "custom_md",
+                        "filenames": _custom_filenames,
+                    },
+                )
+            )
+            logger.info(
+                "Registered custom_md context source (filenames=%s)", _custom_filenames
+            )
+
     if harness.AGENTS_MD_ENABLED:
         from context.agents_md import fetch_agents_md
 

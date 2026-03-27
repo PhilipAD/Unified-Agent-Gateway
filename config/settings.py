@@ -178,6 +178,31 @@ class IntegrationSettings(BaseSettings):
 class AgentHarnessSettings(BaseSettings):
     """Feature flags and paths for curated agent harness integrations."""
 
+    # ---------------------------------------------------------------------------
+    # Generic / user-defined custom MD loader
+    # Lets operators load any project-specific .md file(s) without writing code.
+    # ---------------------------------------------------------------------------
+    CUSTOM_MD_ENABLED: bool = False
+    CUSTOM_MD_CWD: str = "."
+    CUSTOM_MD_FILENAMES: List[str] = Field(
+        default_factory=list,
+        description=(
+            "File names to search for when CUSTOM_MD_ENABLED is true "
+            "(e.g. MY_RULES.md, TEAM_STANDARDS.md)"
+        ),
+    )
+    CUSTOM_MD_SYSTEM_DIRS: List[str] = Field(
+        default_factory=list,
+        description="System-level directories scanned before the cwd walk",
+    )
+    CUSTOM_MD_USER_DIRS: List[str] = Field(
+        default_factory=list,
+        description="User-level directories scanned before the cwd walk (~ expanded)",
+    )
+    CUSTOM_MD_STOP_AT_GIT_ROOT: bool = True
+    CUSTOM_MD_RESOLVE_IMPORTS: bool = True
+    CUSTOM_MD_MAX_CHARS: Optional[int] = None
+
     AGENTS_MD_ENABLED: bool = False
     AGENTS_MD_CWD: str = "."
 

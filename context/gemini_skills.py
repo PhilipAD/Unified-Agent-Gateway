@@ -136,9 +136,24 @@ def format_skills_catalog(skills: Sequence[SkillMetadata]) -> str:
 
 
 async def fetch_gemini_skills_catalog(**kwargs: Any) -> str:
+    """ContextRegistry fetch.
+
+    Respects per-request kwargs:
+      ``cwd`` / ``workspace_dir``          — workspace directory
+      ``skills_user_roots``                — override user skill root dirs
+      ``skills_project_roots``             — override project skill root dirs
+    """
     from config.settings import AgentHarnessSettings
 
     h = AgentHarnessSettings()
-    cwd = str(kwargs.get("cwd") or kwargs.get("workspace_dir") or h.GEMINI_CLI_SKILLS_WORKSPACE_DIR)
-    skills = discover_skills(cwd)
+    cwd = str(
+        kwargs.get("cwd") or kwargs.get("workspace_dir") or h.GEMINI_CLI_SKILLS_WORKSPACE_DIR
+    )
+    user_roots = kwargs.get("skills_user_roots") or ("~/.gemini/skills", "~/.agents/skills")
+    project_roots = kwargs.get("skills_project_roots") or (".gemini/skills", ".agents/skills")
+    skills = discover_skills(
+        cwd,
+        user_skill_roots=user_roots,
+        project_skill_roots=project_roots,
+    )
     return format_skills_catalog(skills)
