@@ -16,6 +16,7 @@ import logging
 from typing import Any, List, Optional, Tuple
 
 from config.settings import (
+    AgentHarnessSettings,
     GatewaySettings,
     IntegrationSettings,
     NamedContextPreset,
@@ -151,6 +152,118 @@ async def bootstrap(
     for name, preset in gw_settings.NAMED_CONTEXTS.items():
         _register_named_context(contexts, name, preset)
         logger.info("Registered named context '%s' (mode=%s)", name, preset.mode)
+
+    # -- Agent harness context sources + MCP preset merge --------------------
+    harness = AgentHarnessSettings()
+
+    if harness.AGENTS_MD_ENABLED:
+        from context.agents_md import fetch_agents_md
+
+        contexts.register(
+            RegisteredContext(
+                name="agents_md",
+                source=ContextSource.STATIC,
+                fetch=fetch_agents_md,
+                required=False,
+                metadata={"harness": "agents_md"},
+            )
+        )
+        logger.info("Registered agents_md context source")
+
+    if harness.GEMINI_CLI_MD_ENABLED:
+        from context.gemini_md import fetch_gemini_md
+
+        contexts.register(
+            RegisteredContext(
+                name="gemini_md",
+                source=ContextSource.STATIC,
+                fetch=fetch_gemini_md,
+                required=False,
+                max_chars=harness.GEMINI_CLI_MD_MAX_CHARS,
+                metadata={"harness": "gemini_md"},
+            )
+        )
+        logger.info("Registered gemini_md context source")
+
+    if harness.GEMINI_CLI_SKILLS_ENABLED:
+        from context.gemini_skills import fetch_gemini_skills_catalog
+
+        contexts.register(
+            RegisteredContext(
+                name="gemini_skills",
+                source=ContextSource.STATIC,
+                fetch=fetch_gemini_skills_catalog,
+                required=False,
+                metadata={"harness": "gemini_skills"},
+            )
+        )
+        logger.info("Registered gemini_skills context source")
+
+    if harness.WINDSURF_RULES_ENABLED:
+        from context.windsurf_rules import fetch_windsurf_rules
+
+        contexts.register(
+            RegisteredContext(
+                name="windsurf_rules",
+                source=ContextSource.STATIC,
+                fetch=fetch_windsurf_rules,
+                required=False,
+                metadata={"harness": "windsurf_rules"},
+            )
+        )
+        logger.info("Registered windsurf_rules context source")
+
+    if harness.CLINE_RULES_ENABLED:
+        from context.cline_rules import fetch_cline_rules
+
+        contexts.register(
+            RegisteredContext(
+                name="cline_rules",
+                source=ContextSource.STATIC,
+                fetch=fetch_cline_rules,
+                required=False,
+                metadata={"harness": "cline_rules"},
+            )
+        )
+        logger.info("Registered cline_rules context source")
+
+    if harness.GEMINI_CLI_MCP_BRIDGE:
+        from runtime.gemini_mcp_bridge import load_gemini_cli_mcp_presets
+
+        presets = load_gemini_cli_mcp_presets(
+            harness.GEMINI_CLI_MCP_WORKSPACE_DIR,
+            system_config_dir=harness.GEMINI_CLI_SYSTEM_CONFIG_DIR,
+        )
+        gw_settings.MCP_SERVERS.update(presets)
+        logger.info("Merged %d Gemini CLI MCP presets", len(presets))
+
+    if harness.WINDSURF_MCP_BRIDGE:
+        from runtime.windsurf_mcp_bridge import load_windsurf_mcp_presets
+
+        presets = load_windsurf_mcp_presets(harness.WINDSURF_MCP_CONFIG_PATH)
+        gw_settings.MCP_SERVERS.update(presets)
+        logger.info("Merged %d Windsurf MCP presets", len(presets))
+
+    if harness.COPILOT_MCP_BRIDGE:
+        from runtime.github_mcp_bridge import load_github_mcp_presets
+
+        url = harness.GITHUB_MCP_URL or None
+        presets = load_github_mcp_presets(
+            url=url,
+            toolsets=harness.COPILOT_MCP_TOOLSETS,
+        )
+        gw_settings.MCP_SERVERS.update(presets)
+        logger.info("Merged GitHub MCP preset")
+
+    if harness.CODEX_MCP_ENABLED:
+        from runtime.codex_mcp_bridge import load_codex_mcp_tools
+
+        n = await load_codex_mcp_tools(
+            tools,
+            namespace="codex",
+            command=harness.CODEX_BINARY,
+        )
+        logger.info("Codex MCP tools registered: %d", n)
 
     return tools, contexts
 

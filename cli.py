@@ -137,6 +137,10 @@ def providers() -> None:
         "deepseek": "DEEPSEEK_API_KEY",
         "mistral": "MISTRAL_API_KEY",
         "xai": "XAI_API_KEY",
+        "claude_agent": "ANTHROPIC_API_KEY",
+        "cursor_cloud_agent": "CURSOR_API_KEY",
+        "codex": "OPENAI_API_KEY",
+        "copilot": "COPILOT_GITHUB_TOKEN",
     }
 
     table = Table(title="Registered Providers")

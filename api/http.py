@@ -1,14 +1,17 @@
 from __future__ import annotations
 
+import json
+import logging
 from contextlib import AsyncExitStack
 from typing import Any, Dict, List, Literal, Optional, Tuple
 
 import httpx
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from config.settings import (
+    AgentHarnessSettings,
     GatewaySettings,
     NamedContextPreset,
     ProviderSettings,
@@ -16,6 +19,8 @@ from config.settings import (
 from context.registry import ContextRegistry, ContextSource, RegisteredContext
 from core.agent_loop import AgentLoop
 from core.types import GatewayError, NormalizedMessage, Role
+from providers.cursor_cloud_agent import CursorCloudAgentProvider, verify_cursor_webhook_signature
+from runtime.cursor_webhook import signal_cursor_agent_event
 from runtime.router import (
     ProviderConfig,
     create_provider,
@@ -38,10 +43,14 @@ class AppState:
 
 _state = AppState()
 
+logger = logging.getLogger(__name__)
+
 
 async def _lifespan(app: FastAPI):  # noqa: ARG001
     yield
 
+
+lifespan = _lifespan
 
 app = FastAPI(title="Unified Agents SDK", version="0.1.0", lifespan=_lifespan)
 
@@ -428,6 +437,13 @@ async def _compose_registries(
     return tools, contexts
 
 
+def _merged_run_options(body: AgentQueryRequest) -> Dict[str, Any]:
+    profile = resolve_agent_profile(
+        _state.gateway_settings, agent_id=body.agent_id, profile=body.profile
+    )
+    return {**dict(profile.extra), **body.options}
+
+
 def _resolve_provider_config_for_request(body: AgentQueryRequest) -> ProviderConfig:
     """Resolve provider config, applying optional per-request credentials."""
     cfg = resolve_provider_config(
@@ -515,7 +531,7 @@ async def agent_query(body: AgentQueryRequest):
             result = await loop.run_conversation(
                 messages,
                 context_kwargs={"input": body.input, **body.context},
-                **body.options,
+                **_merged_run_options(body),
             )
         except GatewayError as exc:
             return JSONResponse(
@@ -574,6 +590,7 @@ async def agent_query_stream(request: Request, body: AgentQueryRequest):
             async for event in provider.stream(
                 messages=messages,
                 tools=tools.list_for_provider() or None,
+                **_merged_run_options(body),
             ):
                 if await request.is_disconnected():
                     break
@@ -591,3 +608,149 @@ async def agent_query_stream(request: Request, body: AgentQueryRequest):
             "X-Accel-Buffering": "no",
         },
     )
+
+
+# ---------------------------------------------------------------------------
+# Cursor Cloud Agent webhook + proxies
+# ---------------------------------------------------------------------------
+
+
+class CursorWebhookPayload(BaseModel):
+    event: Optional[str] = None
+    timestamp: Optional[str] = None
+    id: Optional[str] = None
+    status: Optional[str] = None
+    source: Dict[str, Any] = Field(default_factory=dict)
+    target: Dict[str, Any] = Field(default_factory=dict)
+    summary: Optional[str] = None
+
+
+@app.post("/webhooks/cursor")
+async def cursor_webhook_handler(request: Request, _background: BackgroundTasks):
+    raw = await request.body()
+    harness = AgentHarnessSettings()
+    secret = harness.CURSOR_WEBHOOK_SECRET or ""
+    sig = (
+        request.headers.get("X-Webhook-Signature")
+        or request.headers.get("x-webhook-signature")
+        or ""
+    )
+    if secret:
+        if not verify_cursor_webhook_signature(raw, sig, secret):
+            raise HTTPException(status_code=401, detail="invalid webhook signature")
+    try:
+        data = json.loads(raw.decode("utf-8")) if raw else {}
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="invalid json body")
+    agent_id = data.get("id") or data.get("agentId")
+    if agent_id:
+        signal_cursor_agent_event(str(agent_id))
+    try:
+        received = CursorWebhookPayload.model_validate(data).model_dump()
+    except Exception:
+        received = data
+    return {"ok": True, "received": received}
+
+
+def _cursor_api() -> CursorCloudAgentProvider:
+    ps = _state.provider_settings
+    return CursorCloudAgentProvider(
+        api_key=ps.CURSOR_API_KEY or "",
+        model=ps.DEFAULT_CURSOR_MODEL,
+    )
+
+
+@app.get("/cursor-agent/{agent_id}/status")
+async def cursor_agent_status_proxy(agent_id: str):
+    try:
+        return await _cursor_api().get_agent_status(agent_id)
+    except GatewayError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+
+
+@app.get("/cursor-agent/{agent_id}/conversation")
+async def cursor_agent_conversation_proxy(agent_id: str):
+    try:
+        return await _cursor_api().get_conversation(agent_id)
+    except GatewayError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+
+
+@app.get("/cursor-agent/{agent_id}/artifacts")
+async def cursor_agent_artifacts_proxy(agent_id: str):
+    try:
+        return await _cursor_api().list_agent_artifacts(agent_id)
+    except GatewayError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+
+
+class CursorFollowupBody(BaseModel):
+    text: str
+    images: Optional[List[str]] = None
+
+
+@app.post("/cursor-agent/{agent_id}/followup")
+async def cursor_agent_followup_proxy(agent_id: str, body: CursorFollowupBody):
+    try:
+        return await _cursor_api().followup(agent_id, body.text, images=body.images)
+    except GatewayError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+
+
+@app.post("/cursor-agent/{agent_id}/stop")
+async def cursor_agent_stop_proxy(agent_id: str):
+    try:
+        return await _cursor_api().stop_agent(agent_id)
+    except GatewayError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+
+
+@app.delete("/cursor-agent/{agent_id}")
+async def cursor_agent_delete_proxy(agent_id: str):
+    try:
+        await _cursor_api().delete_agent(agent_id)
+        return {"ok": True}
+    except GatewayError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+
+
+# ---------------------------------------------------------------------------
+# Windsurf Enterprise Analytics proxy
+# ---------------------------------------------------------------------------
+
+
+class WindsurfCascadeAnalyticsRequest(BaseModel):
+    service_key: Optional[str] = None
+    start_timestamp: str
+    end_timestamp: str
+    query_requests: List[Dict[str, Any]] = Field(
+        default_factory=lambda: [{"cascade_runs": {}}],
+    )
+    group_name: Optional[str] = None
+    emails: Optional[List[str]] = None
+    ide_types: Optional[List[str]] = None
+
+
+@app.post("/windsurf/analytics/cascade")
+async def windsurf_cascade_analytics_proxy(body: WindsurfCascadeAnalyticsRequest):
+    from api.windsurf_analytics import post_cascade_analytics
+
+    harness = AgentHarnessSettings()
+    key = body.service_key or harness.WINDSURF_ANALYTICS_SERVICE_KEY
+    if not key:
+        raise HTTPException(
+            status_code=400,
+            detail="service_key required (body or WINDSURF_ANALYTICS_SERVICE_KEY)",
+        )
+    try:
+        return await post_cascade_analytics(
+            key,
+            start_timestamp=body.start_timestamp,
+            end_timestamp=body.end_timestamp,
+            query_requests=body.query_requests,
+            group_name=body.group_name,
+            emails=body.emails,
+            ide_types=body.ide_types,
+        )
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(status_code=exc.response.status_code, detail=exc.response.text) from exc

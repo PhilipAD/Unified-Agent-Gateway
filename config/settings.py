@@ -63,6 +63,10 @@ class MCPServerPreset(BaseModel):
     transport: Literal["sse", "streamable_http"] = "streamable_http"
     headers: Dict[str, str] = Field(default_factory=dict)
     timeout_seconds: float = 30.0
+    metadata: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Tool allow/deny lists and other bridge-specific fields",
+    )
 
 
 class NamedContextPreset(BaseModel):
@@ -110,6 +114,10 @@ class AgentProfile(BaseModel):
         default_factory=list,
         description="Named contexts (keys of NAMED_CONTEXTS) always active for this profile",
     )
+    extra: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Provider-specific kwargs merged into provider constructor and run()",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -146,6 +154,15 @@ class ProviderSettings(BaseSettings):
     XAI_BASE_URL: Optional[str] = None
     DEFAULT_XAI_MODEL: str = "grok-4-1-fast-reasoning"
 
+    CURSOR_API_KEY: Optional[str] = None
+    DEFAULT_CURSOR_MODEL: str = "default"
+
+    CODEX_API_KEY: Optional[str] = None
+    DEFAULT_CODEX_MODEL: str = "codex-mini-latest"
+
+    COPILOT_GITHUB_TOKEN: Optional[str] = None
+    DEFAULT_COPILOT_MODEL: str = "default"
+
     model_config = _ENV_CFG
 
 
@@ -154,6 +171,65 @@ class IntegrationSettings(BaseSettings):
 
     CONTEXTFORGE_URL: Optional[str] = None
     CONTEXTFORGE_API_KEY: Optional[str] = None
+
+    model_config = _ENV_CFG
+
+
+class AgentHarnessSettings(BaseSettings):
+    """Feature flags and paths for curated agent harness integrations."""
+
+    AGENTS_MD_ENABLED: bool = False
+    AGENTS_MD_CWD: str = "."
+
+    GEMINI_CLI_MD_ENABLED: bool = False
+    GEMINI_CLI_MD_CWD: str = "."
+    GEMINI_CLI_MD_FILENAMES: List[str] = Field(
+        default_factory=lambda: ["GEMINI.md", "AGENTS.md", "CLAUDE.md"]
+    )
+    GEMINI_CLI_MD_STRIP_AUTO_MEMORY: bool = False
+    GEMINI_CLI_MD_MAX_CHARS: Optional[int] = None
+    GEMINI_CLI_SYSTEM_CONFIG_DIR: Optional[str] = None
+    GEMINI_CLI_SKILLS_ENABLED: bool = False
+    GEMINI_CLI_SKILLS_WORKSPACE_DIR: str = "."
+    GEMINI_CLI_MCP_BRIDGE: bool = False
+    GEMINI_CLI_MCP_WORKSPACE_DIR: str = "."
+
+    WINDSURF_RULES_ENABLED: bool = False
+    WINDSURF_RULES_WORKSPACE_DIR: str = "."
+    WINDSURF_MCP_BRIDGE: bool = False
+    WINDSURF_MCP_CONFIG_PATH: Optional[str] = None
+    WINDSURF_ANALYTICS_SERVICE_KEY: Optional[str] = None
+
+    CLINE_RULES_ENABLED: bool = False
+    CLINE_RULES_WORKSPACE_DIR: str = "."
+
+    CODEX_PROVIDER: str = "openai"
+    CODEX_APPROVAL_POLICY: str = "on-request"
+    CODEX_SANDBOX_MODE: str = "workspace-write"
+    CODEX_REASONING_EFFORT: str = "medium"
+    CODEX_NO_PROJECT_DOC: bool = False
+    CODEX_MCP_ENABLED: bool = False
+    CODEX_USE_APP_SERVER: bool = False
+    CODEX_BINARY: str = "codex"
+
+    COPILOT_MCP_BRIDGE: bool = False
+    COPILOT_MCP_TRANSPORT: str = "remote"
+    COPILOT_MCP_TOOLSETS: Optional[List[str]] = None
+    COPILOT_MCP_URL: str = "https://api.github.com/copilot/mcp"
+    GITHUB_MCP_URL: Optional[str] = None
+
+    CLAUDE_AGENT_DEFAULT_PERMISSION_MODE: str = "acceptEdits"
+    CLAUDE_AGENT_DEFAULT_EFFORT: Optional[str] = None
+    CLAUDE_AGENT_SETTING_SOURCES: List[str] = Field(default_factory=list)
+    CLAUDE_AGENT_ENABLE_FILE_CHECKPOINTING: bool = False
+    CLAUDE_AGENT_USE_CLIENT: bool = False
+
+    CURSOR_WEBHOOK_SECRET: Optional[str] = None
+    CURSOR_POLL_INTERVAL_SECONDS: float = 15.0
+    CURSOR_MAX_WAIT_SECONDS: float = 600.0
+    CURSOR_DEFAULT_REPOSITORY: Optional[str] = None
+    CURSOR_DEFAULT_REF: str = "main"
+    CURSOR_AUTO_CREATE_PR: bool = False
 
     model_config = _ENV_CFG
 

@@ -1,11 +1,16 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Dict, Optional, Type
+import os
+from dataclasses import dataclass, field
+from typing import Any, Dict, Optional, Type
 
 from config.settings import AgentProfile, GatewaySettings, ProviderSettings
 from providers.anthropic import AnthropicProvider
 from providers.base import BaseProvider
+from providers.claude_agent import ClaudeAgentProvider
+from providers.codex_provider import CodexProvider
+from providers.copilot_provider import CopilotProvider
+from providers.cursor_cloud_agent import CursorCloudAgentProvider
 from providers.deepseek import DeepSeekProvider
 from providers.gemini import GeminiProvider
 from providers.groq import GroqProvider
@@ -23,6 +28,10 @@ PROVIDERS: Dict[str, Type[BaseProvider]] = {
     "deepseek": DeepSeekProvider,
     "mistral": MistralProvider,
     "xai": XAIProvider,
+    "claude_agent": ClaudeAgentProvider,
+    "cursor_cloud_agent": CursorCloudAgentProvider,
+    "codex": CodexProvider,
+    "copilot": CopilotProvider,
 }
 
 
@@ -32,6 +41,7 @@ class ProviderConfig:
     api_key: str
     model: str
     base_url: Optional[str] = None
+    extra: Dict[str, Any] = field(default_factory=dict)
 
 
 def resolve_agent_profile(
@@ -76,6 +86,7 @@ def resolve_provider_config(
             api_key=agent_profile.api_key or preset.api_key,
             model=agent_profile.model or preset.model,
             base_url=agent_profile.base_url or preset.base_url,
+            extra=dict(agent_profile.extra),
         )
 
     defaults: Dict[str, dict] = {
@@ -119,6 +130,29 @@ def resolve_provider_config(
             "model": provider_settings.DEFAULT_XAI_MODEL,
             "base_url": provider_settings.XAI_BASE_URL,
         },
+        "claude_agent": {
+            "api_key": provider_settings.ANTHROPIC_API_KEY or "",
+            "model": provider_settings.DEFAULT_ANTHROPIC_MODEL,
+            "base_url": None,
+        },
+        "cursor_cloud_agent": {
+            "api_key": provider_settings.CURSOR_API_KEY or "",
+            "model": provider_settings.DEFAULT_CURSOR_MODEL,
+            "base_url": None,
+        },
+        "codex": {
+            "api_key": provider_settings.CODEX_API_KEY or provider_settings.OPENAI_API_KEY or "",
+            "model": provider_settings.DEFAULT_CODEX_MODEL,
+            "base_url": provider_settings.OPENAI_BASE_URL,
+        },
+        "copilot": {
+            "api_key": provider_settings.COPILOT_GITHUB_TOKEN
+            or os.environ.get("GH_TOKEN")
+            or os.environ.get("GITHUB_TOKEN")
+            or "",
+            "model": provider_settings.DEFAULT_COPILOT_MODEL,
+            "base_url": None,
+        },
     }
 
     cfg = defaults.get(provider_name, {})
@@ -127,6 +161,7 @@ def resolve_provider_config(
         api_key=agent_profile.api_key or cfg.get("api_key", ""),
         model=agent_profile.model or cfg.get("model", ""),
         base_url=agent_profile.base_url or cfg.get("base_url"),
+        extra=dict(agent_profile.extra),
     )
 
 
@@ -143,6 +178,7 @@ def merge_provider_config_overrides(
         api_key=api_key if api_key is not None else cfg.api_key,
         model=model if model is not None else cfg.model,
         base_url=base_url if base_url is not None else cfg.base_url,
+        extra=dict(cfg.extra),
     )
 
 
@@ -153,4 +189,6 @@ def create_provider(cfg: ProviderConfig) -> BaseProvider:
             f"Unknown provider '{cfg.provider_name}'. Available: {list(PROVIDERS.keys())}"
         )
     cls = PROVIDERS[cfg.provider_name]
-    return cls(api_key=cfg.api_key, model=cfg.model, base_url=cfg.base_url)
+    reserved = {"api_key", "model", "base_url"}
+    kw = {k: v for k, v in cfg.extra.items() if k not in reserved}
+    return cls(api_key=cfg.api_key, model=cfg.model, base_url=cfg.base_url, **kw)

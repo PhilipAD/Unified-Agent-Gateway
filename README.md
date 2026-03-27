@@ -226,6 +226,24 @@ Every **—** is a genuine gap in **this SDK** or a real vendor limitation.
 | **Live web search · OAI-compat¹** | Hosted web search requires the **Responses API**. Generic Chat Completions uses function tools you supply. |
 | **Live web search · DeepSeek** | No hosted search tool; implement search as a custom function. |
 
+### Curated agent harnesses
+
+These are **additional** surfaces beyond the core LLM columns above. They reuse the same UAG patterns: `BaseProvider` + `NormalizedResponse` / `StreamEvent` where a programmatic driver exists, `ContextRegistry` for on-disk rules, and `GatewaySettings.MCP_SERVERS` for HTTP/SSE MCP bridges.
+
+Shared utilities (no duplicated walk logic): `context/md_hierarchy.py`, `tools/mcp_config_loader.py`, one `AgentHarnessSettings` class in `config/settings.py`, and optional `AGENTS.md` via `context/agents_md.py`.
+
+| Harness | Provider in `PROVIDERS` | MCP / tools bridge | Context bridge | Notes |
+|---------|:----------------------:|:------------------:|:--------------:|-------|
+| **Claude Agent SDK** | `claude_agent` | In-process MCP via SDK (`pip install 'unified-agents-sdk[claude-agent]'`) | Claude loads `CLAUDE.md` / skills when `setting_sources` set in `AgentProfile.extra` | Wraps `claude_agent_sdk.query` (+ options); UAG tools can be attached via `mcp_servers` in `extra`. |
+| **Gemini CLI** | — | `GEMINI_CLI_MCP_BRIDGE` merges HTTP/SSE from `settings.json` into `MCP_SERVERS` | `GEMINI_CLI_MD_ENABLED`, `GEMINI_CLI_SKILLS_ENABLED` register `gemini_md` / `gemini_skills` | No Gemini CLI Python SDK; parity via file + preset bridge. |
+| **Cursor Cloud Agents** | `cursor_cloud_agent` | API does not expose MCP for callers | — | REST job runner; `POST /webhooks/cursor` + `/cursor-agent/{id}/*` proxies; set `CURSOR_API_KEY`, `repository` in `AgentProfile.extra`. |
+| **Codex CLI** | `codex` | `CODEX_MCP_ENABLED` runs `codex mcp-server` (stdio) at bootstrap | `AGENTS_MD_ENABLED` or Codex `--project-doc` via `extra` | Default: `codex -q` subprocess; optional `codex app-server` JSON-RPC via `use_app_server`. |
+| **Windsurf Cascade** | — | `WINDSURF_MCP_BRIDGE` merges `~/.codeium/windsurf/mcp_config.json` | `WINDSURF_RULES_ENABLED` | No headless Cascade API; Enterprise analytics: `POST /windsurf/analytics/cascade`. |
+| **Cline** | — | — | `CLINE_RULES_ENABLED` loads `.clinerules` | VS Code extension only; rules file bridge only. |
+| **GitHub Copilot** | `copilot` | `COPILOT_MCP_BRIDGE` adds GitHub remote MCP preset | — | `pip install 'unified-agents-sdk[copilot]'` (preview SDK); token `COPILOT_GITHUB_TOKEN` / `GH_TOKEN` / `GITHUB_TOKEN`. |
+
+**Optional install groups:** `[claude-agent]`, `[codex]` (binary separate), `[copilot]`.
+
 ---
 
 ## 📦 Dependencies
@@ -242,6 +260,8 @@ All constraints are declared in [`pyproject.toml`](pyproject.toml). Upper bounds
 | Groq | [`groq`](https://pypi.org/project/groq/) | **1.0.0** | `>=1.0,<2` | `groq` |
 | Mistral | [`mistralai`](https://pypi.org/project/mistralai/) | **1.10.0** | `>=1.10,<2` | `mistral` |
 | MCP | [`mcp`](https://pypi.org/project/mcp/) | **1.26.0** | `>=1.26,<2` | All (tool auto-discovery) |
+| Claude Agent SDK | [`claude-agent-sdk`](https://pypi.org/project/claude-agent-sdk/) | optional | `[claude-agent]` extra | `claude_agent` provider |
+| GitHub Copilot SDK | [`github-copilot-sdk`](https://pypi.org/project/github-copilot-sdk/) | optional | `[copilot]` extra | `copilot` provider |
 
 > **Note:** `openai>=2.0` is required — the Responses API (`client.responses.create`) only exists in the v2 SDK. The `xai` adapter uses the same SDK pointed at `https://api.x.ai/v1`.
 

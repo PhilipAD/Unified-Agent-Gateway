@@ -65,6 +65,9 @@ dev = [
     "ruff>=0.6,<1",
     "pre-commit>=3.0,<4",
 ]
+claude-agent = ["claude-agent-sdk>=0.1.50,<1"]
+codex = []
+copilot = ["github-copilot-sdk>=0.1,<1"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
