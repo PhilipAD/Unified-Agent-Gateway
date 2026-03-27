@@ -45,3 +45,5 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           verbose: true
+          # PEP 740 attestations can yield HTTP 400 with an empty body on PyPI; re-enable when stable.
+          attestations: false
