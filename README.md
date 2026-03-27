@@ -131,9 +131,9 @@ Together · Ollama · Azure · any OAI endpoint
 <td width="25%" align="center" style="vertical-align: top; padding: 12px;">
 
 ### 🛠️ MCP Native
-Connect any [MCP](https://modelcontextprotocol.io) server per-request.<br>
-Named presets or full inline spec.<br>
-Both `streamable_http` and `sse`.
+Gateway-managed (any provider) or<br>
+server-side (OpenAI / Gemini / Groq / xAI).<br>
+Named presets, inline spec, or profile-bound.
 
 </td>
 <td width="25%" align="center" style="vertical-align: top; padding: 12px;">
@@ -232,15 +232,17 @@ These are **additional** surfaces beyond the core LLM columns above. They reuse 
 
 Shared utilities (no duplicated walk logic): `context/md_hierarchy.py`, `tools/mcp_config_loader.py`, one `AgentHarnessSettings` class in `config/settings.py`, and optional `AGENTS.md` via `context/agents_md.py`.
 
-| Harness | Provider in `PROVIDERS` | MCP / tools bridge | Context bridge | Notes |
-|---------|:----------------------:|:------------------:|:--------------:|-------|
-| **Claude Agent SDK** | `claude_agent` | In-process MCP via SDK (`pip install 'unified-agents-sdk[claude-agent]'`) | Claude loads `CLAUDE.md` / skills when `setting_sources` set in `AgentProfile.extra` | Wraps `claude_agent_sdk.query` (+ options); UAG tools can be attached via `mcp_servers` in `extra`. |
-| **Gemini CLI** | — | `GEMINI_CLI_MCP_BRIDGE` merges HTTP/SSE from `settings.json` into `MCP_SERVERS` | `GEMINI_CLI_MD_ENABLED`, `GEMINI_CLI_SKILLS_ENABLED` register `gemini_md` / `gemini_skills` | No Gemini CLI Python SDK; parity via file + preset bridge. |
-| **Cursor Cloud Agents** | `cursor_cloud_agent` | API does not expose MCP for callers | — | REST job runner; `POST /webhooks/cursor` + `/cursor-agent/{id}/*` proxies; set `CURSOR_API_KEY`, `repository` in `AgentProfile.extra`. |
-| **Codex CLI** | `codex` | `CODEX_MCP_ENABLED` runs `codex mcp-server` (stdio) at bootstrap | `AGENTS_MD_ENABLED` or Codex `--project-doc` via `extra` | Default: `codex -q` subprocess; optional `codex app-server` JSON-RPC via `use_app_server`. |
-| **Windsurf Cascade** | — | `WINDSURF_MCP_BRIDGE` merges `~/.codeium/windsurf/mcp_config.json` | `WINDSURF_RULES_ENABLED` | No headless Cascade API; Enterprise analytics: `POST /windsurf/analytics/cascade`. |
-| **Cline** | — | — | `CLINE_RULES_ENABLED` loads `.clinerules` | VS Code extension only; rules file bridge only. |
-| **GitHub Copilot** | `copilot` | `COPILOT_MCP_BRIDGE` adds GitHub remote MCP preset | — | `pip install 'unified-agents-sdk[copilot]'` (preview SDK); token `COPILOT_GITHUB_TOKEN` / `GH_TOKEN` / `GITHUB_TOKEN`. |
+> **MCP columns explained:** *Bridge* = reads the harness's own config file at startup and adds those servers as named presets in `MCP_SERVERS` (per-request, not auto-connected). *Gateway-managed* = gateway connects and executes tools, works with any provider. *Agent-managed* = MCP config passed directly to the agent; the agent runs its own tool loop, gateway does not execute tools. See [MCP — Model Context Protocol](#-mcp--model-context-protocol) for the full explanation.
+
+| Harness | Provider | How MCP works | Context bridge | Notes |
+|---------|:--------:|---------------|:--------------:|-------|
+| **Claude Agent SDK** | `claude_agent` | **Agent-managed.** Pass `mcp_servers` in `options` or `AgentProfile.extra` → forwarded to `ClaudeAgentOptions`. Claude Agent SDK subprocess connects and runs its own tool loop. Gateway `ToolRegistry` is ignored. | `CLAUDE.md` / skills loaded by SDK when `setting_sources` set in `extra` | `pip install 'unified-agents-sdk[claude-agent]'`; wraps `claude_agent_sdk.query`. |
+| **Gemini CLI** | — (no SDK) | **Bridge only.** `GEMINI_CLI_MCP_BRIDGE=true` reads `~/.config/gemini/settings.json`, adds HTTP/SSE servers to `MCP_SERVERS` as named presets. Use any standard provider with `mcp_namespaces` to call them. stdio-only servers in the config are skipped. | `GEMINI_CLI_MD_ENABLED`, `GEMINI_CLI_SKILLS_ENABLED` register `gemini_md` / `gemini_skills` context sources | No headless Gemini CLI API; context + MCP preset bridge only. |
+| **Cursor Cloud Agents** | `cursor_cloud_agent` | **Not supported.** Cursor Cloud Agent REST API does not expose an MCP endpoint for callers. | — | REST job runner + webhook proxy. `CURSOR_API_KEY`, `repository` in `AgentProfile.extra`. |
+| **Codex CLI** | `codex` | **Inverted bridge.** `CODEX_MCP_ENABLED=true` starts `codex mcp-server` (stdio subprocess) at bootstrap and loads its tools into the **global** `ToolRegistry` — making Codex tools available to other providers, not the Codex provider itself. Codex's own tool use is managed by Codex internally via `~/.codex/config.toml`. | `AGENTS_MD_ENABLED`; or pass `project_doc` path in `extra` | `codex -q` subprocess by default; `use_app_server=true` for JSON-RPC mode. |
+| **Windsurf Cascade** | — (no SDK) | **Bridge only.** `WINDSURF_MCP_BRIDGE=true` reads `~/.codeium/windsurf/mcp_config.json`, adds HTTP/SSE servers to `MCP_SERVERS` as named presets. | `WINDSURF_RULES_ENABLED` loads `.windsurf/rules/` | No headless Cascade API; context + MCP preset bridge only. |
+| **Cline** | — (no SDK) | **Not applicable.** Cline is a VS Code extension; no MCP bridge or remote API. | `CLINE_RULES_ENABLED` loads `.clinerules` | Rules file bridge only. |
+| **GitHub Copilot** | `copilot` (preview) | **Bridge only.** `COPILOT_MCP_BRIDGE=true` adds `github_mcp` preset pointing at `https://api.githubcopilot.com/mcp` with your GitHub token. Use any standard provider with `mcp_namespaces: ["github_mcp"]` to get repos/issues/PRs/code-search tools. `copilot` provider itself does not support tool calling (preview). | — | `pip install 'unified-agents-sdk[copilot]'`; token via `COPILOT_GITHUB_TOKEN` / `GH_TOKEN`. |
 
 **Optional install groups:** `[claude-agent]`, `[codex]` (binary separate), `[copilot]`.
 
@@ -358,23 +360,42 @@ uag chat "2+2?" --json
                │       AgentLoop       │  core/agent_loop.py
                │  1. Inject context    │
                │  2. Call provider     │
-               │  3. Execute tools     │
-               │  4. Loop until done   │
-               └──────┬────────┬───────┘
+               │  3. Execute tools     │ ◄─── gateway executes
+               │  4. Loop until done   │      MCP tools here
+               └──────┬────────┬───────┘      (Path 1)
                       │        │
         ┌─────────────▼──┐  ┌──▼──────────────┐
         │  ToolRegistry  │  │ ContextRegistry  │
         │   tools/       │  │   context/       │
-        │  • Python fns  │  │  • Static text   │
-        │  • MCP servers │  │  • RAG / HTTP    │
-        │  • HTTP tools  │  │  • ContextForge  │
+        │  • MCP tools   │◄─┤  • AGENTS.md     │
+        │    (gateway-   │  │  • CLAUDE.md     │
+        │     managed)   │  │  • rules files   │
+        │  • HTTP tools  │  │  • RAG / HTTP    │
         └────────────────┘  └─────────────────┘
                       │
-        ┌──────────────────────▼────────────────────────────────────┐
+        ┌─────────────▼────────────────────────────────────────────┐
         │                  Provider Adapters                       │
         │  openai_compatible │ openai_responses │ anthropic        │
         │  gemini │ groq │ deepseek │ mistral │ xai               │
-        └─────────────────────────────────────────────────────────┘
+        └────────────────────────┬─────────────────────────────────┘
+                                 │
+                   ┌─────────────▼──────────────┐
+                   │  Provider-native MCP        │  (Path 2)
+                   │  openai_responses / xai /   │
+                   │  groq / gemini only         │
+                   │  LLM backend calls MCP      │
+                   │  server directly            │
+                   └─────────────────────────────┘
+
+  At startup (bootstrap.py):
+  ┌─────────────────────────────────────────────────────────┐
+  │  MCP Bridges (optional, read existing agent configs)    │
+  │  GEMINI_CLI_MCP_BRIDGE  → reads settings.json          │
+  │  WINDSURF_MCP_BRIDGE    → reads mcp_config.json        │  → merge into
+  │  COPILOT_MCP_BRIDGE     → builds github_mcp preset     │    MCP_SERVERS
+  │  CODEX_MCP_ENABLED      → starts codex mcp-server,     │    named presets
+  │                           loads tools globally          │
+  └─────────────────────────────────────────────────────────┘
 ```
 
 ### Layer reference
@@ -574,6 +595,255 @@ curl -s http://localhost:8000/agent-query \
 
 ---
 
+## 🔌 MCP — Model Context Protocol
+
+[MCP](https://modelcontextprotocol.io) is a standard for exposing tools to AI agents. An MCP server is a process (local or remote) that advertises a list of tools and executes them when called. This SDK wires MCP into the agent loop in two completely different ways depending on what you are using.
+
+---
+
+### Two MCP paths
+
+#### Path 1 — Gateway-managed MCP (works with every provider)
+
+The gateway connects to MCP servers, discovers their tools, and passes them to the LLM as ordinary function definitions. When the LLM calls a tool, the **gateway executes it** and returns the result — the LLM never touches the MCP server directly.
+
+```
+Request → _compose_registries()
+               ├─ InlineMCPClient.connect(url)    ← gateway connects
+               ├─ list_tools()                    ← gateway discovers tools
+               └─ ToolRegistry.register(...)      ← stored for this request
+
+AgentLoop
+    └─ provider.run(messages, tools=[ToolDefinition, ...])
+         └─ LLM returns tool_call
+              └─ AgentLoop executes it → result sent back to LLM → loop
+```
+
+This works with **every provider** (Anthropic, OpenAI, Gemini, Groq, Mistral, DeepSeek, xAI, any OAI-compatible endpoint) because from the provider's perspective it is just receiving a list of function definitions — it has no idea they came from MCP.
+
+**Three ways to attach MCP servers per request:**
+
+**1. Named preset** — define credentials once in `.env`, reference by name:
+
+```env
+# .env
+MCP_SERVERS={
+  "search": {"url": "http://search-mcp.internal/mcp",
+             "transport": "streamable_http",
+             "headers": {"Authorization": "Bearer sk-..."}},
+  "github": {"url": "https://api.githubcopilot.com/mcp",
+             "headers": {"Authorization": "Bearer ghp_..."}}
+}
+```
+
+```json
+POST /agent-query
+{
+  "input": "Search for recent papers on RAG",
+  "runtime": { "mcp_namespaces": ["search"] }
+}
+```
+
+**2. Permanently bound to a profile** — callers never have to specify it:
+
+```env
+AGENT_PROFILES={
+  "researcher": {
+    "provider_name": "anthropic",
+    "mcp_namespaces": ["search", "github"]
+  }
+}
+```
+
+Any request with `"profile": "researcher"` automatically gets those MCP tools. No `mcp_namespaces` needed in the request body.
+
+**3. Inline spec** — full connection details in the request body, no pre-registration needed:
+
+```json
+POST /agent-query
+{
+  "input": "Create a GitHub issue for the pagination bug",
+  "runtime": {
+    "mcp_servers": [{
+      "url": "https://api.githubcopilot.com/mcp",
+      "namespace": "github",
+      "transport": "streamable_http",
+      "headers": {"Authorization": "Bearer ghp_..."}
+    }]
+  }
+}
+```
+
+---
+
+#### Path 2 — Provider-native (server-side) MCP
+
+Some providers support receiving MCP server specs and connecting to them **themselves**. The gateway is not involved in tool execution at all — the LLM backend calls the MCP server directly. You pass the MCP config in `options` per request:
+
+```json
+POST /agent-query
+{
+  "profile": "openai-r",
+  "input": "Search and summarise recent news on LLMs",
+  "options": {
+    "mcp_servers": [
+      {
+        "type": "mcp",
+        "server_url": "https://my-search-mcp.com/mcp",
+        "server_label": "search",
+        "require_approval": "never",
+        "headers": {"Authorization": "Bearer sk-..."}
+      }
+    ]
+  }
+}
+```
+
+Providers that support this and their specific field names:
+
+| Provider | Profile | `options` key | Notes |
+|---|---|---|---|
+| OpenAI Responses | `openai-r` | `mcp_servers` | Also supports `connector_id`, `defer_loading` |
+| xAI / Grok | `grok` | `mcp_servers` | Same wire format; no `connector_id` |
+| Groq | `fast` | `mcp_servers` | Routes through Groq's Responses API path |
+| Gemini | `gemini` | `mcp_servers` | Converted to `genai_types.McpServer`; streamable HTTP only |
+
+When to use Path 2 instead of Path 1: when you want the LLM provider's infrastructure to call the MCP server (lower latency for remote tools, no gateway round-trip per tool call), or when the MCP server requires direct auth that you do not want the gateway to proxy.
+
+---
+
+### MCP bridges — what they are and why
+
+Several curated agent harnesses (Gemini CLI, Windsurf, Codex, GitHub Copilot) each maintain their own MCP server configs in their own config files on disk. An **MCP bridge** is a bootstrap-time reader that parses those existing config files and translates them into named `MCPServerPreset` entries that the UAG gateway can use.
+
+**Why this exists:** You may already have MCP servers configured in Windsurf or Gemini CLI. Bridges mean you do not have to re-enter the same server URLs and credentials into `.env` — the gateway reads the config files those agents already use and surfaces those servers through the unified `MCP_SERVERS` preset system.
+
+**What a bridge is not:** A bridge does not automatically connect to anything at startup. It registers the MCP servers as *named presets* — callers still reference them by namespace in their requests. The connection itself is always per-request.
+
+Enable bridges in `.env`:
+
+```env
+# Parse ~/.config/gemini/settings.json and merge servers into MCP_SERVERS
+GEMINI_CLI_MCP_BRIDGE=true
+
+# Parse ~/.codeium/windsurf/mcp_config.json and merge servers into MCP_SERVERS
+WINDSURF_MCP_BRIDGE=true
+
+# Add GitHub's remote MCP server as a named preset (github_mcp)
+COPILOT_MCP_BRIDGE=true
+COPILOT_GITHUB_TOKEN=ghp_...    # or GH_TOKEN / GITHUB_TOKEN
+
+# Start codex mcp-server (stdio) at startup and load tools globally
+CODEX_MCP_ENABLED=true
+```
+
+Each bridge and what it does at startup:
+
+| Bridge flag | Source file read | Result |
+|---|---|---|
+| `GEMINI_CLI_MCP_BRIDGE` | `~/.config/gemini/settings.json` (or `GEMINI_CLI_SYSTEM_CONFIG_DIR`) | Parses `mcpServers`, adds HTTP/SSE servers as named presets in `MCP_SERVERS` (stdio servers skipped — not remotely accessible) |
+| `WINDSURF_MCP_BRIDGE` | `~/.codeium/windsurf/mcp_config.json` (or `WINDSURF_MCP_CONFIG_PATH`) | Same pattern: HTTP/SSE servers added as named presets |
+| `COPILOT_MCP_BRIDGE` | No file — constructs preset from token + URL | Adds a `github_mcp` named preset pointing at `https://api.githubcopilot.com/mcp` with your GitHub Bearer token |
+| `CODEX_MCP_ENABLED` | No file — starts subprocess | Spawns `codex mcp-server` over stdio, loads its tools into the **global** `ToolRegistry` at startup — the only bridge that auto-connects |
+
+After bridges run, all merged servers are available as named presets just like any `MCP_SERVERS` entry:
+
+```json
+{ "runtime": { "mcp_namespaces": ["github_mcp", "search"] } }
+```
+
+---
+
+### MCP for curated agent harnesses
+
+Claude Agent, Codex CLI, and GitHub Copilot behave differently from standard providers. They each manage their own execution environments — the gateway's `ToolRegistry` is **not** forwarded to them.
+
+#### Claude Agent SDK (`claude_agent` provider)
+
+MCP servers are configured inside `ClaudeAgentOptions` and handled entirely by the Claude Agent SDK subprocess. The gateway's tool list is dropped with a warning if passed.
+
+Configure via `options` in the request or permanently in `AgentProfile.extra`:
+
+```json
+POST /agent-query
+{
+  "profile": "claude_agent",
+  "input": "Search the web for recent AI safety papers",
+  "options": {
+    "mcp_servers": [
+      {
+        "type": "stdio",
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-brave-search"],
+        "env": {"BRAVE_API_KEY": "sk-..."}
+      }
+    ],
+    "allowed_tools": ["mcp__brave-search__brave_web_search"],
+    "permission_mode": "acceptEdits"
+  }
+}
+```
+
+Or permanently in `.env`:
+
+```env
+AGENT_PROFILES={
+  "claude_agent": {
+    "provider_name": "claude_agent",
+    "model": "claude-opus-4-5",
+    "extra": {
+      "mcp_servers": [{"type": "stdio", "command": "npx",
+                       "args": ["-y", "@modelcontextprotocol/server-brave-search"],
+                       "env": {"BRAVE_API_KEY": "sk-..."}}],
+      "allowed_tools": ["mcp__brave-search__brave_web_search"]
+    }
+  }
+}
+```
+
+The Claude Agent SDK connects to those MCP servers internally and runs the full tool-calling loop itself. The gateway receives only the final text output.
+
+#### Codex CLI (`codex` provider)
+
+Codex manages its own tools via its own config (`~/.codex/config.toml`) and sandbox. The gateway tool list is dropped with a warning.
+
+**Codex MCP works the other direction:** when `CODEX_MCP_ENABLED=true`, the gateway starts `codex mcp-server` as a stdio subprocess at startup and loads the tools it exposes into the global `ToolRegistry`. Those tools then become available to **other providers** (Anthropic, OpenAI, etc.) — not to the Codex provider itself.
+
+```env
+CODEX_MCP_ENABLED=true        # start codex mcp-server at startup
+CODEX_BINARY=codex            # path to binary (default: codex)
+```
+
+After this, any standard provider can use Codex tools:
+
+```json
+{
+  "profile": "anthropic",
+  "input": "Run the test suite and report failures",
+  "runtime": { "use_global_tools": true }
+}
+```
+
+#### GitHub Copilot (`copilot` provider)
+
+The Copilot SDK provider is a technical preview and does not support tool calling. However, GitHub's own MCP server (`https://api.githubcopilot.com/mcp`) works fully via the gateway using Path 1 — the gateway connects to it and any standard provider can use GitHub's tools (repos, issues, PRs, code search):
+
+```env
+COPILOT_MCP_BRIDGE=true
+COPILOT_GITHUB_TOKEN=ghp_...
+COPILOT_MCP_TOOLSETS=["repos","issues","pulls"]   # optional filter
+```
+
+```json
+{
+  "profile": "anthropic",
+  "input": "List open PRs in my org and summarise the review status",
+  "runtime": { "mcp_namespaces": ["github_mcp"] }
+}
+```
+
+---
+
 ## 📋 Request Schema
 
 <details open>
@@ -746,7 +1016,7 @@ make test-cov
 pytest -q -m "not integration"
 ```
 
-200 tests, all passing, all offline.
+238 tests, all passing, all offline.
 
 ---
 
@@ -762,7 +1032,7 @@ unified-agents-sdk/
 ├── postman/           Postman collection (52 requests, 10 folders)
 ├── providers/         OpenAI, OpenAI Responses, Anthropic, Gemini, Groq, DeepSeek, Mistral, xAI adapters
 ├── runtime/           Router, profile resolution, bootstrap, SSE helpers
-├── tests/             pytest test suite (200 tests, all offline)
+├── tests/             pytest test suite (238 tests, all offline)
 ├── tools/             Tool registry, MCP loader, inline MCP HTTP client
 ├── cli.py             Typer CLI (uag serve / chat / providers)
 ├── main.py            Application entry point (uvicorn)
