@@ -11,6 +11,10 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 _Changes that are merged to `main` but not yet released._
 
+### Fixed
+
+- Pin `ruff==0.15.8` in dev dependencies and bump `ruff-pre-commit` to `v0.15.8` so `ruff format --check` in CI matches local/pre-commit output (avoids failures when `ruff>=0.6,<1` resolves to a newer formatter).
+
 ---
 
 ## [0.3.0] — 2026-03-27
