@@ -54,6 +54,29 @@ class ContextEchoProvider:
         yield StreamEvent(type="done")
 
 
+class ClaudeProbeProvider:
+    name = "claude_agent"
+    last_kwargs = {}
+
+    def __init__(self, *a, **kw):
+        self.model = "claude-probe-model"
+
+    async def run(self, messages, tools=None, **kwargs):
+        ClaudeProbeProvider.last_kwargs = dict(kwargs)
+        return NormalizedResponse(
+            messages=[NormalizedMessage(role=Role.ASSISTANT, content="claude probe answer")],
+            usage={},
+            provider="claude_agent",
+            model="claude-probe-model",
+        )
+
+    async def stream(self, messages, tools=None, **kwargs):
+        from core.types import StreamEvent
+
+        ClaudeProbeProvider.last_kwargs = dict(kwargs)
+        yield StreamEvent(type="done")
+
+
 @pytest.fixture(autouse=True)
 def _configure_stub(monkeypatch):
     """Patch the router to always use StubProvider."""
@@ -62,6 +85,7 @@ def _configure_stub(monkeypatch):
     original_providers = router_mod.PROVIDERS.copy()
     router_mod.PROVIDERS["stub"] = StubProvider
     router_mod.PROVIDERS["context_echo"] = ContextEchoProvider
+    router_mod.PROVIDERS["claude_agent"] = ClaudeProbeProvider
 
     configure(
         tool_registry=ToolRegistry(),
@@ -658,6 +682,96 @@ async def test_profile_mcp_namespaces_automatically_merged():
 
     assert resp.status_code == 200
     assert any("search.profile_tool" in n for n in registered_names)
+
+
+@pytest.mark.asyncio
+async def test_claude_agent_maps_runtime_mcp_into_options_mcp_servers():
+    """For claude_agent, runtime MCP presets/inline specs map to options.mcp_servers."""
+    from config.settings import MCPServerPreset
+
+    ClaudeProbeProvider.last_kwargs = {}
+    configure(
+        tool_registry=ToolRegistry(),
+        context_registry=ContextRegistry(),
+        provider_settings=ProviderSettings(),
+        gateway_settings=GatewaySettings(
+            AGENT_PROFILES={"default": {"provider_name": "claude_agent"}},
+            ALLOW_DYNAMIC_RUNTIME_REGISTRATION=True,
+            MCP_SERVERS={
+                "search": MCPServerPreset(
+                    url="https://search.example.com/mcp",
+                    transport="streamable_http",
+                    headers={"Authorization": "Bearer abc"},
+                )
+            },
+        ),
+    )
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.post(
+            "/agent-query",
+            json={
+                "input": "hello",
+                "runtime": {
+                    "mcp_namespaces": ["search"],
+                    "mcp_servers": [
+                        {
+                            "url": "https://remote.example.com/sse",
+                            "namespace": "remote",
+                            "transport": "sse",
+                            "headers": {"Authorization": "Bearer xyz"},
+                        }
+                    ],
+                },
+            },
+        )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["output"] == "claude probe answer"
+    assert "mcp_servers" in ClaudeProbeProvider.last_kwargs
+    assert ClaudeProbeProvider.last_kwargs["mcp_servers"]["search"]["type"] == "http"
+    assert ClaudeProbeProvider.last_kwargs["mcp_servers"]["search"]["url"].startswith("https://")
+    assert ClaudeProbeProvider.last_kwargs["mcp_servers"]["remote"]["type"] == "sse"
+    assert any("claude_agent: mapped runtime MCP servers" in w for w in data["warnings"])
+
+
+@pytest.mark.asyncio
+async def test_claude_agent_accepts_legacy_list_mcp_servers_in_options():
+    """Legacy list-style options.mcp_servers are normalized to Claude's dict format."""
+    ClaudeProbeProvider.last_kwargs = {}
+    configure(
+        tool_registry=ToolRegistry(),
+        context_registry=ContextRegistry(),
+        provider_settings=ProviderSettings(),
+        gateway_settings=GatewaySettings(
+            AGENT_PROFILES={"default": {"provider_name": "claude_agent"}},
+        ),
+    )
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.post(
+            "/agent-query",
+            json={
+                "input": "hello",
+                "options": {
+                    "mcp_servers": [
+                        {
+                            "namespace": "brave-search",
+                            "command": "npx",
+                            "args": ["-y", "@modelcontextprotocol/server-brave-search"],
+                        }
+                    ]
+                },
+            },
+        )
+
+    assert resp.status_code == 200
+    assert "brave-search" in ClaudeProbeProvider.last_kwargs.get("mcp_servers", {})
+    brave_cfg = ClaudeProbeProvider.last_kwargs["mcp_servers"]["brave-search"]
+    assert brave_cfg["command"] == "npx"
 
 
 @pytest.mark.asyncio

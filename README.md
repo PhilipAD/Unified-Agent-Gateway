@@ -239,7 +239,7 @@ Shared utilities (no duplicated walk logic): `context/md_hierarchy.py`, `tools/m
 
 | Harness | Provider | How MCP works | Context bridge | Notes |
 |---------|:--------:|---------------|:--------------:|-------|
-| **Claude Agent SDK** | `claude_agent` | **Agent-managed.** Pass `mcp_servers` in `options` or `AgentProfile.extra` → forwarded to `ClaudeAgentOptions`. Claude Agent SDK subprocess connects and runs its own tool loop. Gateway `ToolRegistry` is ignored. | `CLAUDE.md` / skills loaded by SDK when `setting_sources` set in `extra` | `pip install 'unified-agents-sdk[claude-agent]'`; wraps `claude_agent_sdk.query`. |
+| **Claude Agent SDK** | `claude_agent` | **Agent-managed.** `runtime.mcp_namespaces` / `runtime.mcp_servers` are auto-mapped into Claude `options.mcp_servers` (dict form). You can also pass `options.mcp_servers` or `AgentProfile.extra.mcp_servers` directly. Claude Agent SDK subprocess connects and runs its own tool loop. Gateway `ToolRegistry` is ignored. | `CLAUDE.md` / skills loaded by SDK when `setting_sources` set in `extra` | `pip install 'unified-agents-sdk[claude-agent]'`; wraps `claude_agent_sdk.query`. |
 | **Gemini CLI** | — (no SDK) | **Bridge only.** `GEMINI_CLI_MCP_BRIDGE=true` reads `~/.config/gemini/settings.json`, adds HTTP/SSE servers to `MCP_SERVERS` as named presets. Use any standard provider with `mcp_namespaces` to call them. stdio-only servers in the config are skipped. | `GEMINI_CLI_MD_ENABLED`, `GEMINI_CLI_SKILLS_ENABLED` register `gemini_md` / `gemini_skills` context sources | No headless Gemini CLI API; context + MCP preset bridge only. |
 | **Cursor Cloud Agents** | `cursor_cloud_agent` | **Not supported.** Cursor Cloud Agent REST API does not expose an MCP endpoint for callers. | — | REST job runner + webhook proxy. `CURSOR_API_KEY`, `repository` in `AgentProfile.extra`. |
 | **Codex CLI** | `codex` | **Inverted bridge.** `CODEX_MCP_ENABLED=true` starts `codex mcp-server` (stdio subprocess) at bootstrap and loads its tools into the **global** `ToolRegistry` — making Codex tools available to other providers, not the Codex provider itself. Codex's own tool use is managed by Codex internally via `~/.codex/config.toml`. | `AGENTS_MD_ENABLED`; or pass `project_doc` path in `extra` | `codex -q` subprocess by default; `use_app_server=true` for JSON-RPC mode. |
@@ -765,9 +765,37 @@ Claude Agent, Codex CLI, and GitHub Copilot behave differently from standard pro
 
 #### Claude Agent SDK (`claude_agent` provider)
 
-MCP servers are configured inside `ClaudeAgentOptions` and handled entirely by the Claude Agent SDK subprocess. The gateway's tool list is dropped with a warning if passed.
+MCP servers are configured inside `ClaudeAgentOptions` and handled entirely by the Claude Agent SDK subprocess.
 
-Configure via `options` in the request or permanently in `AgentProfile.extra`:
+For `claude_agent`, UAG now supports **both**:
+
+1. **Runtime MCP presets/inline specs** (`runtime.mcp_namespaces`, `runtime.mcp_servers`) — auto-mapped into Claude `options.mcp_servers`.
+2. **Native Claude config** (`options.mcp_servers` or `AgentProfile.extra.mcp_servers`) — passed through directly.
+
+If the same server key appears in both, explicit `options.mcp_servers` / profile `extra.mcp_servers` wins.
+
+Example using runtime presets (autoload path):
+
+```env
+MCP_SERVERS={
+  "docs": {
+    "url": "https://code.claude.com/docs/mcp",
+    "transport": "streamable_http"
+  }
+}
+```
+
+```json
+POST /agent-query
+{
+  "profile": "claude_agent",
+  "input": "Explain Claude Code hooks using the docs MCP server",
+  "runtime": { "mcp_namespaces": ["docs"] },
+  "options": { "allowed_tools": ["mcp__docs__*"] }
+}
+```
+
+Example using native Claude `mcp_servers` directly:
 
 ```json
 POST /agent-query
@@ -775,14 +803,13 @@ POST /agent-query
   "profile": "claude_agent",
   "input": "Search the web for recent AI safety papers",
   "options": {
-    "mcp_servers": [
-      {
-        "type": "stdio",
+    "mcp_servers": {
+      "brave-search": {
         "command": "npx",
         "args": ["-y", "@modelcontextprotocol/server-brave-search"],
         "env": {"BRAVE_API_KEY": "sk-..."}
       }
-    ],
+    },
     "allowed_tools": ["mcp__brave-search__brave_web_search"],
     "permission_mode": "acceptEdits"
   }
@@ -797,15 +824,18 @@ AGENT_PROFILES={
     "provider_name": "claude_agent",
     "model": "claude-opus-4-5",
     "extra": {
-      "mcp_servers": [{"type": "stdio", "command": "npx",
-                       "args": ["-y", "@modelcontextprotocol/server-brave-search"],
-                       "env": {"BRAVE_API_KEY": "sk-..."}}],
+      "mcp_servers": {
+        "brave-search": {
+          "command": "npx",
+          "args": ["-y", "@modelcontextprotocol/server-brave-search"],
+          "env": {"BRAVE_API_KEY": "sk-..."}
+        }
+      },
       "allowed_tools": ["mcp__brave-search__brave_web_search"]
     }
   }
 }
 ```
-
 The Claude Agent SDK connects to those MCP servers internally and runs the full tool-calling loop itself. The gateway receives only the final text output.
 
 #### Codex CLI (`codex` provider)

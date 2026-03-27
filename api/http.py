@@ -324,6 +324,8 @@ async def _compose_registries(
     runtime_cfg: RuntimeRegistryConfig,
     stack: AsyncExitStack,
     warnings: List[str],
+    *,
+    enable_gateway_mcp: bool = True,
 ) -> Tuple[ToolRegistry, ContextRegistry]:
     """Build request-scoped ToolRegistry and ContextRegistry.
 
@@ -350,55 +352,56 @@ async def _compose_registries(
 
     ns_prefix = f"{runtime_cfg.namespace}." if runtime_cfg.namespace else ""
 
-    # --- Named MCP preset references (from MCP_SERVERS in settings) ---
-    for ns_name in runtime_cfg.mcp_namespaces:
-        preset = _state.gateway_settings.MCP_SERVERS.get(ns_name)
-        if preset is None:
-            warnings.append(
-                f"MCP namespace '{ns_name}' not found in MCP_SERVERS settings — skipped"
+    if enable_gateway_mcp:
+        # --- Named MCP preset references (from MCP_SERVERS in settings) ---
+        for ns_name in runtime_cfg.mcp_namespaces:
+            preset = _state.gateway_settings.MCP_SERVERS.get(ns_name)
+            if preset is None:
+                warnings.append(
+                    f"MCP namespace '{ns_name}' not found in MCP_SERVERS settings — skipped"
+                )
+                continue
+            qualified_ns = f"{ns_prefix}{ns_name}"
+            client = InlineMCPClient(
+                url=preset.url,
+                transport=preset.transport,
+                headers=preset.headers,
+                timeout=preset.timeout_seconds,
             )
-            continue
-        qualified_ns = f"{ns_prefix}{ns_name}"
-        client = InlineMCPClient(
-            url=preset.url,
-            transport=preset.transport,
-            headers=preset.headers,
-            timeout=preset.timeout_seconds,
-        )
-        try:
-            connected = await stack.enter_async_context(client)
-            count = await load_mcp_tools_from_server(
-                registry=tools, client=connected, namespace=qualified_ns
-            )
-            if count == 0:
-                warnings.append(f"MCP preset '{ns_name}' at '{preset.url}' reported zero tools")
-        except Exception as exc:
-            warnings.append(f"MCP preset '{ns_name}' at '{preset.url}' failed to connect: {exc}")
+            try:
+                connected = await stack.enter_async_context(client)
+                count = await load_mcp_tools_from_server(
+                    registry=tools, client=connected, namespace=qualified_ns
+                )
+                if count == 0:
+                    warnings.append(f"MCP preset '{ns_name}' at '{preset.url}' reported zero tools")
+            except Exception as exc:
+                warnings.append(f"MCP preset '{ns_name}' at '{preset.url}' failed to connect: {exc}")
 
-    # --- Inline MCP servers (full spec in request) ---
-    for spec in runtime_cfg.mcp_servers:
-        qualified_ns = f"{ns_prefix}{spec.namespace}"
-        client = InlineMCPClient(
-            url=spec.url,
-            transport=spec.transport,
-            headers=spec.headers,
-            timeout=spec.timeout_seconds,
-        )
-        try:
-            connected = await stack.enter_async_context(client)
-            count = await load_mcp_tools_from_server(
-                registry=tools, client=connected, namespace=qualified_ns
+        # --- Inline MCP servers (full spec in request) ---
+        for spec in runtime_cfg.mcp_servers:
+            qualified_ns = f"{ns_prefix}{spec.namespace}"
+            client = InlineMCPClient(
+                url=spec.url,
+                transport=spec.transport,
+                headers=spec.headers,
+                timeout=spec.timeout_seconds,
             )
-            if count == 0:
+            try:
+                connected = await stack.enter_async_context(client)
+                count = await load_mcp_tools_from_server(
+                    registry=tools, client=connected, namespace=qualified_ns
+                )
+                if count == 0:
+                    warnings.append(
+                        f"Inline MCP server at '{spec.url}' (namespace '{qualified_ns}') "
+                        "reported zero tools"
+                    )
+            except Exception as exc:
                 warnings.append(
                     f"Inline MCP server at '{spec.url}' (namespace '{qualified_ns}') "
-                    "reported zero tools"
+                    f"failed to connect: {exc}"
                 )
-        except Exception as exc:
-            warnings.append(
-                f"Inline MCP server at '{spec.url}' (namespace '{qualified_ns}') "
-                f"failed to connect: {exc}"
-            )
 
     # --- Inline HTTP tools ---
     for spec in runtime_cfg.tools:
@@ -572,6 +575,95 @@ def _merged_run_options(body: AgentQueryRequest) -> Dict[str, Any]:
     return {**dict(profile.extra), **body.options}
 
 
+def _normalize_claude_mcp_servers(raw: Any) -> Dict[str, Dict[str, Any]]:
+    """Accept legacy list or native dict mcp_servers and normalize to dict."""
+    if isinstance(raw, dict):
+        out: Dict[str, Dict[str, Any]] = {}
+        for k, v in raw.items():
+            if isinstance(v, dict):
+                out[str(k)] = dict(v)
+        return out
+
+    if isinstance(raw, list):
+        out = {}
+        for idx, item in enumerate(raw):
+            if not isinstance(item, dict):
+                continue
+            name = (
+                item.get("name")
+                or item.get("server_name")
+                or item.get("namespace")
+                or f"server_{idx + 1}"
+            )
+            cfg = dict(item)
+            cfg.pop("name", None)
+            cfg.pop("server_name", None)
+            cfg.pop("namespace", None)
+            out[str(name)] = cfg
+        return out
+
+    return {}
+
+
+def _runtime_mcp_for_claude(
+    runtime_cfg: RuntimeRegistryConfig,
+    warnings: List[str],
+) -> Dict[str, Dict[str, Any]]:
+    """Convert runtime MCP references into Claude Agent SDK mcp_servers format."""
+    out: Dict[str, Dict[str, Any]] = {}
+    ns_prefix = f"{runtime_cfg.namespace}." if runtime_cfg.namespace else ""
+
+    for ns_name in runtime_cfg.mcp_namespaces:
+        preset = _state.gateway_settings.MCP_SERVERS.get(ns_name)
+        if preset is None:
+            warnings.append(
+                f"MCP namespace '{ns_name}' not found in MCP_SERVERS settings — skipped"
+            )
+            continue
+        key = f"{ns_prefix}{ns_name}"
+        out[key] = {
+            "type": "http" if preset.transport == "streamable_http" else "sse",
+            "url": preset.url,
+        }
+        if preset.headers:
+            out[key]["headers"] = preset.headers
+
+    for spec in runtime_cfg.mcp_servers:
+        key = f"{ns_prefix}{spec.namespace}"
+        out[key] = {
+            "type": "http" if spec.transport == "streamable_http" else "sse",
+            "url": spec.url,
+        }
+        if spec.headers:
+            out[key]["headers"] = spec.headers
+
+    return out
+
+
+def _resolved_run_options(
+    body: AgentQueryRequest,
+    cfg: ProviderConfig,
+    runtime_cfg: RuntimeRegistryConfig,
+    warnings: List[str],
+) -> Dict[str, Any]:
+    run_opts = _merged_run_options(body)
+    if cfg.provider_name != "claude_agent":
+        return run_opts
+
+    existing = _normalize_claude_mcp_servers(run_opts.get("mcp_servers"))
+    runtime_servers = _runtime_mcp_for_claude(runtime_cfg, warnings=warnings)
+    merged = {**runtime_servers, **existing}  # explicit options/profile mcp_servers win
+    if merged:
+        run_opts["mcp_servers"] = merged
+        if runtime_servers and "allowed_tools" not in run_opts:
+            warnings.append(
+                "claude_agent: mapped runtime MCP servers into options.mcp_servers; "
+                "set options.allowed_tools (e.g. mcp__<server>__*) to grant MCP access."
+            )
+
+    return run_opts
+
+
 def _resolve_provider_config_for_request(body: AgentQueryRequest) -> ProviderConfig:
     """Resolve provider config, applying optional per-request credentials."""
     cfg = resolve_provider_config(
@@ -638,7 +730,13 @@ async def agent_query(body: AgentQueryRequest):
 
     async with AsyncExitStack() as stack:
         warnings: List[str] = []
-        tools, contexts = await _compose_registries(runtime_cfg, stack=stack, warnings=warnings)
+        run_opts = _resolved_run_options(body, cfg=cfg, runtime_cfg=runtime_cfg, warnings=warnings)
+        tools, contexts = await _compose_registries(
+            runtime_cfg,
+            stack=stack,
+            warnings=warnings,
+            enable_gateway_mcp=(cfg.provider_name != "claude_agent"),
+        )
 
         loop = AgentLoop(
             provider=provider,
@@ -659,7 +757,7 @@ async def agent_query(body: AgentQueryRequest):
             result = await loop.run_conversation(
                 messages,
                 context_kwargs={"input": body.input, **body.context},
-                **_merged_run_options(body),
+                **run_opts,
             )
         except GatewayError as exc:
             return JSONResponse(
@@ -691,10 +789,16 @@ async def agent_query_stream(request: Request, body: AgentQueryRequest):
     # Open MCP sessions before the streaming generator starts; keep them
     # alive via the stack until the generator finishes.
     stack = AsyncExitStack()
+    warnings: List[str] = []
+    run_opts = _resolved_run_options(body, cfg=cfg, runtime_cfg=runtime_cfg, warnings=warnings)
     try:
         await stack.__aenter__()
-        warnings: List[str] = []
-        tools, contexts = await _compose_registries(runtime_cfg, stack=stack, warnings=warnings)
+        tools, contexts = await _compose_registries(
+            runtime_cfg,
+            stack=stack,
+            warnings=warnings,
+            enable_gateway_mcp=(cfg.provider_name != "claude_agent"),
+        )
 
         messages: List[NormalizedMessage] = []
         if body.context.get("system_prompt"):
@@ -718,7 +822,7 @@ async def agent_query_stream(request: Request, body: AgentQueryRequest):
             async for event in provider.stream(
                 messages=messages,
                 tools=tools.list_for_provider() or None,
-                **_merged_run_options(body),
+                **run_opts,
             ):
                 if await request.is_disconnected():
                     break
