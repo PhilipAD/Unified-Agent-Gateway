@@ -63,7 +63,7 @@ dev = [
     "pytest-cov>=5.0,<6",
     "coverage>=7.0,<8",
     "ruff==0.15.8",
-    "pre-commit>=3.0,<4",
+    "pre-commit>=3.0,<5",
 ]
 claude-agent = ["claude-agent-sdk>=0.1.50,<1"]
 codex = []
