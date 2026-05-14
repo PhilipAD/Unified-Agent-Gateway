@@ -31,7 +31,7 @@ dependencies = [
     # Upper bounds prevent silent breakage from future major-version APIs.
     "openai>=2.0,<3",           # 2.30.0 — OpenAI + Responses API (requires >=2)
     "anthropic>=0.86,<1",       # 0.86.0 — Claude / Anthropic SDK
-    "google-genai>=1.47,<2",    # 1.47.0 — Gemini via google-genai (not google-generativeai)
+    "google-genai>=1.47,<3",    # 1.47.0 — Gemini via google-genai (not google-generativeai)
     "groq>=1.0,<2",             # 1.0.0  — Groq (v1 is a breaking re-release)
     "mistralai>=1.10,<2",       # 1.10.0 — Mistral SDK v1 (chat + agents API)
     "mcp>=1.26,<2",             # 1.26.0 — MCP client (streamable_http / sse)
